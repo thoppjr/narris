@@ -20,6 +20,8 @@ import { useState } from "react";
 interface SidebarProps {
   projectTitle: string;
   onBack: () => void;
+  onShowPlot: () => void;
+  onShowCharacters: () => void;
 }
 
 function SortableChapter({
@@ -100,7 +102,7 @@ function SortableChapter({
   );
 }
 
-export default function Sidebar({ projectTitle, onBack }: SidebarProps) {
+export default function Sidebar({ projectTitle, onBack, onShowPlot, onShowCharacters }: SidebarProps) {
   const { chapters, activeChapterId, createChapter, deleteChapter, setActiveChapter, reorder } =
     useChapterStore();
   const [newTitle, setNewTitle] = useState("");
@@ -156,6 +158,22 @@ export default function Sidebar({ projectTitle, onBack }: SidebarProps) {
         <div className="text-xs text-ink-muted mt-0.5">
           {totalWords.toLocaleString()} words
         </div>
+      </div>
+
+      {/* Tools */}
+      <div className="px-3 py-2 border-b border-sand-200 dark:border-stone-700 flex gap-2">
+        <button
+          onClick={onShowPlot}
+          className="flex-1 px-2 py-1.5 text-xs rounded-lg bg-sand-200 dark:bg-stone-700 text-stone-600 dark:text-sand-300 hover:bg-sand-300 dark:hover:bg-stone-600 transition-colors text-center"
+        >
+          Plot Points
+        </button>
+        <button
+          onClick={onShowCharacters}
+          className="flex-1 px-2 py-1.5 text-xs rounded-lg bg-sand-200 dark:bg-stone-700 text-stone-600 dark:text-sand-300 hover:bg-sand-300 dark:hover:bg-stone-600 transition-colors text-center"
+        >
+          Characters
+        </button>
       </div>
 
       {/* Chapter list */}
