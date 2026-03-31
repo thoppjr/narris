@@ -252,6 +252,53 @@ fn import_project(state: State<AppState>, data: serde_json::Value) -> Result<db:
     Ok(imported)
 }
 
+// --- Writing Goals Commands ---
+
+#[tauri::command]
+fn get_writing_goal(state: State<AppState>, project_id: String) -> Result<Option<db::WritingGoal>, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.get_writing_goal(&project_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn save_writing_goal(state: State<AppState>, goal: db::WritingGoal) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.save_writing_goal(&goal).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_writing_goal(state: State<AppState>, project_id: String) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.delete_writing_goal(&project_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn log_daily_words(
+    state: State<AppState>,
+    project_id: String,
+    date: String,
+    word_count: i32,
+    words_written: i32,
+    minutes_active: i32,
+) -> Result<db::DailyLog, String> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.log_daily_words(&id, &project_id, &date, word_count, words_written, minutes_active)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn list_daily_logs(state: State<AppState>, project_id: String) -> Result<Vec<db::DailyLog>, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.list_daily_logs(&project_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_daily_log(state: State<AppState>, project_id: String, date: String) -> Result<Option<db::DailyLog>, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.get_daily_log(&project_id, &date).map_err(|e| e.to_string())
+}
+
 // --- Export Commands ---
 
 #[tauri::command]
@@ -375,6 +422,12 @@ pub fn run() {
             import_project,
             get_formatting_settings,
             save_formatting_settings,
+            get_writing_goal,
+            save_writing_goal,
+            delete_writing_goal,
+            log_daily_words,
+            list_daily_logs,
+            get_daily_log,
             create_plot_point,
             list_plot_points,
             update_plot_point,

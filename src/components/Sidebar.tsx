@@ -25,6 +25,8 @@ interface SidebarProps {
   onShowCharacters: () => void;
   onExport: () => void;
   onShowFormatting: () => void;
+  onShowHabits: () => void;
+  onShowPreview: () => void;
 }
 
 const SECTION_TYPE_LABELS: Record<string, string> = {
@@ -156,7 +158,7 @@ function SortableChapter({
   );
 }
 
-export default function Sidebar({ projectTitle, onBack, onShowPlot, onShowCharacters, onExport, onShowFormatting }: SidebarProps) {
+export default function Sidebar({ projectTitle, onBack, onShowPlot, onShowCharacters, onExport, onShowFormatting, onShowHabits, onShowPreview }: SidebarProps) {
   const { chapters, activeChapterId, createChapter, createSection, deleteChapter, setActiveChapter, reorder } =
     useChapterStore();
   const [newTitle, setNewTitle] = useState("");
@@ -250,6 +252,20 @@ export default function Sidebar({ projectTitle, onBack, onShowPlot, onShowCharac
             className="flex-1 px-2 py-1.5 text-xs rounded-lg bg-sage-100 dark:bg-sage-800 text-sage-700 dark:text-sage-200 hover:bg-sage-200 dark:hover:bg-sage-700 transition-colors text-center"
           >
             Formatting
+          </button>
+          <button
+            onClick={onShowPreview}
+            className="flex-1 px-2 py-1.5 text-xs rounded-lg bg-sage-100 dark:bg-sage-800 text-sage-700 dark:text-sage-200 hover:bg-sage-200 dark:hover:bg-sage-700 transition-colors text-center"
+          >
+            Preview
+          </button>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={onShowHabits}
+            className="flex-1 px-2 py-1.5 text-xs rounded-lg bg-sand-200 dark:bg-stone-700 text-stone-600 dark:text-sand-300 hover:bg-sand-300 dark:hover:bg-stone-600 transition-colors text-center"
+          >
+            Goals
           </button>
           <button
             onClick={onExport}
