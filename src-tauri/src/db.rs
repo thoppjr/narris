@@ -21,8 +21,34 @@ pub struct Chapter {
     pub sort_order: i32,
     pub chapter_type: String,
     pub word_count: i32,
+    pub parent_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FormattingSettings {
+    pub id: String,
+    pub project_id: String,
+    pub template_name: String,
+    pub body_font: String,
+    pub heading_font: String,
+    pub body_size_pt: f64,
+    pub heading_size_pt: f64,
+    pub line_height: f64,
+    pub paragraph_spacing_em: f64,
+    pub paragraph_indent_em: f64,
+    pub margin_top_in: f64,
+    pub margin_bottom_in: f64,
+    pub margin_inner_in: f64,
+    pub margin_outer_in: f64,
+    pub drop_cap_enabled: bool,
+    pub drop_cap_lines: i32,
+    pub lead_in_style: String,
+    pub lead_in_words: i32,
+    pub scene_break_style: String,
+    pub scene_break_custom: String,
+    pub justify_text: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -61,6 +87,7 @@ impl Database {
         let conn = Connection::open(db_path)?;
         let db = Database { conn };
         db.init_tables()?;
+        db.migrate()?;
         Ok(db)
     }
 
@@ -83,6 +110,7 @@ impl Database {
                 sort_order INTEGER NOT NULL DEFAULT 0,
                 chapter_type TEXT NOT NULL DEFAULT 'chapter',
                 word_count INTEGER NOT NULL DEFAULT 0,
+                parent_id TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
@@ -90,6 +118,31 @@ impl Database {
 
             CREATE INDEX IF NOT EXISTS idx_chapters_project ON chapters(project_id);
             CREATE INDEX IF NOT EXISTS idx_chapters_order ON chapters(project_id, sort_order);
+
+            CREATE TABLE IF NOT EXISTS formatting_settings (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL UNIQUE,
+                template_name TEXT NOT NULL DEFAULT 'default',
+                body_font TEXT NOT NULL DEFAULT 'Georgia',
+                heading_font TEXT NOT NULL DEFAULT 'sans-serif',
+                body_size_pt REAL NOT NULL DEFAULT 11.0,
+                heading_size_pt REAL NOT NULL DEFAULT 18.0,
+                line_height REAL NOT NULL DEFAULT 1.6,
+                paragraph_spacing_em REAL NOT NULL DEFAULT 0.0,
+                paragraph_indent_em REAL NOT NULL DEFAULT 1.5,
+                margin_top_in REAL NOT NULL DEFAULT 0.75,
+                margin_bottom_in REAL NOT NULL DEFAULT 0.75,
+                margin_inner_in REAL NOT NULL DEFAULT 0.875,
+                margin_outer_in REAL NOT NULL DEFAULT 0.625,
+                drop_cap_enabled INTEGER NOT NULL DEFAULT 0,
+                drop_cap_lines INTEGER NOT NULL DEFAULT 3,
+                lead_in_style TEXT NOT NULL DEFAULT 'none',
+                lead_in_words INTEGER NOT NULL DEFAULT 3,
+                scene_break_style TEXT NOT NULL DEFAULT 'asterisks',
+                scene_break_custom TEXT NOT NULL DEFAULT '',
+                justify_text INTEGER NOT NULL DEFAULT 1,
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+            );
 
             CREATE TABLE IF NOT EXISTS plot_points (
                 id TEXT PRIMARY KEY,
@@ -123,6 +176,17 @@ impl Database {
             CREATE INDEX IF NOT EXISTS idx_plot_points_project ON plot_points(project_id);
             CREATE INDEX IF NOT EXISTS idx_characters_project ON characters(project_id);"
         )?;
+        Ok(())
+    }
+
+    fn migrate(&self) -> Result<()> {
+        // Add parent_id column if missing (for existing databases)
+        let has_parent_id: bool = self.conn
+            .prepare("SELECT parent_id FROM chapters LIMIT 0")
+            .is_ok();
+        if !has_parent_id {
+            self.conn.execute_batch("ALTER TABLE chapters ADD COLUMN parent_id TEXT")?;
+        }
         Ok(())
     }
 
@@ -173,6 +237,7 @@ impl Database {
 
     pub fn delete_project(&self, id: &str) -> Result<()> {
         self.conn.execute("DELETE FROM chapters WHERE project_id = ?1", params![id])?;
+        self.conn.execute("DELETE FROM formatting_settings WHERE project_id = ?1", params![id])?;
         self.conn.execute("DELETE FROM projects WHERE id = ?1", params![id])?;
         Ok(())
     }
@@ -182,8 +247,8 @@ impl Database {
     pub fn create_chapter(&self, id: &str, project_id: &str, title: &str, sort_order: i32) -> Result<Chapter> {
         let now = chrono::Utc::now().to_rfc3339();
         self.conn.execute(
-            "INSERT INTO chapters (id, project_id, title, content, sort_order, chapter_type, word_count, created_at, updated_at)
-             VALUES (?1, ?2, ?3, '', ?4, 'chapter', 0, ?5, ?5)",
+            "INSERT INTO chapters (id, project_id, title, content, sort_order, chapter_type, word_count, parent_id, created_at, updated_at)
+             VALUES (?1, ?2, ?3, '', ?4, 'chapter', 0, NULL, ?5, ?5)",
             params![id, project_id, title, sort_order, now],
         )?;
         Ok(Chapter {
@@ -194,14 +259,55 @@ impl Database {
             sort_order,
             chapter_type: "chapter".to_string(),
             word_count: 0,
+            parent_id: None,
             created_at: now.clone(),
             updated_at: now,
         })
     }
 
+    pub fn create_section(&self, id: &str, project_id: &str, title: &str, content: &str, sort_order: i32, section_type: &str, parent_id: Option<&str>) -> Result<Chapter> {
+        let now = chrono::Utc::now().to_rfc3339();
+        let word_count = content.split_whitespace().count() as i32;
+        self.conn.execute(
+            "INSERT INTO chapters (id, project_id, title, content, sort_order, chapter_type, word_count, parent_id, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)",
+            params![id, project_id, title, content, sort_order, section_type, word_count, parent_id, now],
+        )?;
+        Ok(Chapter {
+            id: id.to_string(),
+            project_id: project_id.to_string(),
+            title: title.to_string(),
+            content: content.to_string(),
+            sort_order,
+            chapter_type: section_type.to_string(),
+            word_count,
+            parent_id: parent_id.map(|s| s.to_string()),
+            created_at: now.clone(),
+            updated_at: now,
+        })
+    }
+
+    pub fn update_section_type(&self, id: &str, section_type: &str) -> Result<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+        self.conn.execute(
+            "UPDATE chapters SET chapter_type = ?1, updated_at = ?2 WHERE id = ?3",
+            params![section_type, now, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_chapter_parent(&self, id: &str, parent_id: Option<&str>) -> Result<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+        self.conn.execute(
+            "UPDATE chapters SET parent_id = ?1, updated_at = ?2 WHERE id = ?3",
+            params![parent_id, now, id],
+        )?;
+        Ok(())
+    }
+
     pub fn list_chapters(&self, project_id: &str) -> Result<Vec<Chapter>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, project_id, title, content, sort_order, chapter_type, word_count, created_at, updated_at
+            "SELECT id, project_id, title, content, sort_order, chapter_type, word_count, parent_id, created_at, updated_at
              FROM chapters WHERE project_id = ?1 ORDER BY sort_order ASC"
         )?;
         let rows = stmt.query_map(params![project_id], |row| {
@@ -213,8 +319,9 @@ impl Database {
                 sort_order: row.get(4)?,
                 chapter_type: row.get(5)?,
                 word_count: row.get(6)?,
-                created_at: row.get(7)?,
-                updated_at: row.get(8)?,
+                parent_id: row.get(7)?,
+                created_at: row.get(8)?,
+                updated_at: row.get(9)?,
             })
         })?;
         rows.collect()
@@ -254,6 +361,8 @@ impl Database {
     }
 
     pub fn delete_chapter(&self, id: &str) -> Result<()> {
+        // Also unparent any children
+        self.conn.execute("UPDATE chapters SET parent_id = NULL WHERE parent_id = ?1", params![id])?;
         self.conn.execute("DELETE FROM chapters WHERE id = ?1", params![id])?;
         Ok(())
     }
@@ -268,10 +377,10 @@ impl Database {
         )?;
 
         // Get original chapter info for project_id and sort_order
-        let (project_id, sort_order): (String, i32) = self.conn.query_row(
-            "SELECT project_id, sort_order FROM chapters WHERE id = ?1",
+        let (project_id, sort_order, parent_id): (String, i32, Option<String>) = self.conn.query_row(
+            "SELECT project_id, sort_order, parent_id FROM chapters WHERE id = ?1",
             params![id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )?;
 
         // Bump sort_order for all chapters after this one
@@ -283,9 +392,9 @@ impl Database {
         // Insert new chapter right after
         let new_sort = sort_order + 1;
         self.conn.execute(
-            "INSERT INTO chapters (id, project_id, title, content, sort_order, chapter_type, word_count, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, 'chapter', ?6, ?7, ?7)",
-            params![new_id, project_id, new_title, new_content, new_sort, new_word_count, now],
+            "INSERT INTO chapters (id, project_id, title, content, sort_order, chapter_type, word_count, parent_id, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, 'chapter', ?6, ?7, ?8, ?8)",
+            params![new_id, project_id, new_title, new_content, new_sort, new_word_count, parent_id, now],
         )?;
 
         Ok(Chapter {
@@ -296,6 +405,7 @@ impl Database {
             sort_order: new_sort,
             chapter_type: "chapter".to_string(),
             word_count: new_word_count,
+            parent_id,
             created_at: now.clone(),
             updated_at: now,
         })
@@ -326,6 +436,92 @@ impl Database {
             params![project_id, removed_order],
         )?;
 
+        Ok(())
+    }
+
+    // --- Formatting Settings ---
+
+    pub fn get_formatting_settings(&self, project_id: &str) -> Result<Option<FormattingSettings>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, project_id, template_name, body_font, heading_font, body_size_pt, heading_size_pt,
+                    line_height, paragraph_spacing_em, paragraph_indent_em,
+                    margin_top_in, margin_bottom_in, margin_inner_in, margin_outer_in,
+                    drop_cap_enabled, drop_cap_lines, lead_in_style, lead_in_words,
+                    scene_break_style, scene_break_custom, justify_text
+             FROM formatting_settings WHERE project_id = ?1"
+        )?;
+        let mut rows = stmt.query_map(params![project_id], |row| {
+            Ok(FormattingSettings {
+                id: row.get(0)?,
+                project_id: row.get(1)?,
+                template_name: row.get(2)?,
+                body_font: row.get(3)?,
+                heading_font: row.get(4)?,
+                body_size_pt: row.get(5)?,
+                heading_size_pt: row.get(6)?,
+                line_height: row.get(7)?,
+                paragraph_spacing_em: row.get(8)?,
+                paragraph_indent_em: row.get(9)?,
+                margin_top_in: row.get(10)?,
+                margin_bottom_in: row.get(11)?,
+                margin_inner_in: row.get(12)?,
+                margin_outer_in: row.get(13)?,
+                drop_cap_enabled: row.get::<_, i32>(14)? != 0,
+                drop_cap_lines: row.get(15)?,
+                lead_in_style: row.get(16)?,
+                lead_in_words: row.get(17)?,
+                scene_break_style: row.get(18)?,
+                scene_break_custom: row.get(19)?,
+                justify_text: row.get::<_, i32>(20)? != 0,
+            })
+        })?;
+        match rows.next() {
+            Some(Ok(settings)) => Ok(Some(settings)),
+            Some(Err(e)) => Err(e),
+            None => Ok(None),
+        }
+    }
+
+    pub fn save_formatting_settings(&self, settings: &FormattingSettings) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO formatting_settings (id, project_id, template_name, body_font, heading_font,
+                body_size_pt, heading_size_pt, line_height, paragraph_spacing_em, paragraph_indent_em,
+                margin_top_in, margin_bottom_in, margin_inner_in, margin_outer_in,
+                drop_cap_enabled, drop_cap_lines, lead_in_style, lead_in_words,
+                scene_break_style, scene_break_custom, justify_text)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)
+             ON CONFLICT(project_id) DO UPDATE SET
+                template_name = excluded.template_name,
+                body_font = excluded.body_font,
+                heading_font = excluded.heading_font,
+                body_size_pt = excluded.body_size_pt,
+                heading_size_pt = excluded.heading_size_pt,
+                line_height = excluded.line_height,
+                paragraph_spacing_em = excluded.paragraph_spacing_em,
+                paragraph_indent_em = excluded.paragraph_indent_em,
+                margin_top_in = excluded.margin_top_in,
+                margin_bottom_in = excluded.margin_bottom_in,
+                margin_inner_in = excluded.margin_inner_in,
+                margin_outer_in = excluded.margin_outer_in,
+                drop_cap_enabled = excluded.drop_cap_enabled,
+                drop_cap_lines = excluded.drop_cap_lines,
+                lead_in_style = excluded.lead_in_style,
+                lead_in_words = excluded.lead_in_words,
+                scene_break_style = excluded.scene_break_style,
+                scene_break_custom = excluded.scene_break_custom,
+                justify_text = excluded.justify_text",
+            params![
+                settings.id, settings.project_id, settings.template_name,
+                settings.body_font, settings.heading_font,
+                settings.body_size_pt, settings.heading_size_pt,
+                settings.line_height, settings.paragraph_spacing_em, settings.paragraph_indent_em,
+                settings.margin_top_in, settings.margin_bottom_in, settings.margin_inner_in, settings.margin_outer_in,
+                settings.drop_cap_enabled as i32, settings.drop_cap_lines,
+                settings.lead_in_style, settings.lead_in_words,
+                settings.scene_break_style, settings.scene_break_custom,
+                settings.justify_text as i32,
+            ],
+        )?;
         Ok(())
     }
 
@@ -448,9 +644,9 @@ impl Database {
         )?;
         for ch in chapters {
             self.conn.execute(
-                "INSERT INTO chapters (id, project_id, title, content, sort_order, chapter_type, word_count, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
-                params![uuid::Uuid::new_v4().to_string(), project.id, ch.title, ch.content, ch.sort_order, ch.chapter_type, ch.word_count, now],
+                "INSERT INTO chapters (id, project_id, title, content, sort_order, chapter_type, word_count, parent_id, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)",
+                params![uuid::Uuid::new_v4().to_string(), project.id, ch.title, ch.content, ch.sort_order, ch.chapter_type, ch.word_count, ch.parent_id, now],
             )?;
         }
         Ok(())

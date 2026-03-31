@@ -4,10 +4,12 @@ import Editor from "./Editor";
 import PlotCanvas from "./PlotCanvas";
 import CharacterSheets from "./CharacterSheets";
 import ExportDialog from "./ExportDialog";
+import FormatPanel from "./FormatPanel";
 import { useChapterStore } from "../stores/chapterStore";
 import { useProjectStore } from "../stores/projectStore";
+import { useFormattingStore } from "../stores/formattingStore";
 
-type View = "editor" | "plot" | "characters";
+type View = "editor" | "plot" | "characters" | "formatting";
 
 interface EditorViewProps {
   projectId: string;
@@ -16,6 +18,7 @@ interface EditorViewProps {
 
 export default function EditorView({ projectId, onBack }: EditorViewProps) {
   const { loadChapters, createChapter, clear } = useChapterStore();
+  const clearFormatting = useFormattingStore((s) => s.clear);
   const project = useProjectStore((s) =>
     s.projects.find((p) => p.id === projectId)
   );
@@ -29,8 +32,11 @@ export default function EditorView({ projectId, onBack }: EditorViewProps) {
         await createChapter(projectId, "Chapter 1");
       }
     });
-    return () => clear();
-  }, [projectId, loadChapters, createChapter, clear]);
+    return () => {
+      clear();
+      clearFormatting();
+    };
+  }, [projectId, loadChapters, createChapter, clear, clearFormatting]);
 
   if (!project) return null;
 
@@ -42,17 +48,23 @@ export default function EditorView({ projectId, onBack }: EditorViewProps) {
     return <CharacterSheets projectId={projectId} onClose={() => setView("editor")} />;
   }
 
+  if (view === "formatting") {
+    return <FormatPanel projectId={projectId} onClose={() => setView("editor")} />;
+  }
+
   return (
     <div className="h-screen flex">
       <Sidebar
         projectTitle={project.title}
         onBack={() => {
           clear();
+          clearFormatting();
           onBack();
         }}
         onShowPlot={() => setView("plot")}
         onShowCharacters={() => setView("characters")}
         onExport={() => setShowExport(true)}
+        onShowFormatting={() => setView("formatting")}
       />
       <Editor />
       <ExportDialog

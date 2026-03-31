@@ -9,10 +9,12 @@ interface ChapterStore {
 
   loadChapters: (projectId: string) => Promise<void>;
   createChapter: (projectId: string, title: string) => Promise<Chapter>;
+  createSection: (projectId: string, title: string, content: string, sectionType: string, parentId?: string | null) => Promise<Chapter>;
   deleteChapter: (id: string) => Promise<void>;
   setActiveChapter: (id: string | null) => void;
   updateContent: (id: string, content: string, wordCount: number) => Promise<void>;
   updateTitle: (id: string, title: string) => Promise<void>;
+  updateSectionType: (id: string, sectionType: string) => Promise<void>;
   reorder: (chapterIds: string[]) => Promise<void>;
   splitChapter: (id: string, newTitle: string, originalContent: string, originalWordCount: number, newContent: string, newWordCount: number) => Promise<void>;
   mergeWithNext: (id: string) => Promise<void>;
@@ -42,6 +44,15 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
       activeChapterId: chapter.id,
     }));
     return chapter;
+  },
+
+  createSection: async (projectId: string, title: string, content: string, sectionType: string, parentId?: string | null) => {
+    const sortOrder = get().chapters.length;
+    const section = await cmd.createSection(projectId, title, content, sortOrder, sectionType, parentId ?? null);
+    // Reload to get correct ordering
+    const chapters = await cmd.listChapters(projectId);
+    set({ chapters, activeChapterId: section.id });
+    return section;
   },
 
   deleteChapter: async (id: string) => {
@@ -78,6 +89,15 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
     set((state) => ({
       chapters: state.chapters.map((c) =>
         c.id === id ? { ...c, title } : c
+      ),
+    }));
+  },
+
+  updateSectionType: async (id: string, sectionType: string) => {
+    await cmd.updateSectionType(id, sectionType);
+    set((state) => ({
+      chapters: state.chapters.map((c) =>
+        c.id === id ? { ...c, chapter_type: sectionType } : c
       ),
     }));
   },

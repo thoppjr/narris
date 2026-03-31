@@ -47,6 +47,34 @@ fn create_chapter(state: State<AppState>, project_id: String, title: String, sor
 }
 
 #[tauri::command]
+fn create_section(
+    state: State<AppState>,
+    project_id: String,
+    title: String,
+    content: String,
+    sort_order: i32,
+    section_type: String,
+    parent_id: Option<String>,
+) -> Result<db::Chapter, String> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.create_section(&id, &project_id, &title, &content, sort_order, &section_type, parent_id.as_deref())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn update_section_type(state: State<AppState>, id: String, section_type: String) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.update_section_type(&id, &section_type).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn update_chapter_parent(state: State<AppState>, id: String, parent_id: Option<String>) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.update_chapter_parent(&id, parent_id.as_deref()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn list_chapters(state: State<AppState>, project_id: String) -> Result<Vec<db::Chapter>, String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
     db.list_chapters(&project_id).map_err(|e| e.to_string())
@@ -115,6 +143,20 @@ fn export_project(state: State<AppState>, project_id: String) -> Result<serde_js
         "chapters": chapters,
     }))
     .map_err(|e| e.to_string())
+}
+
+// --- Formatting Settings Commands ---
+
+#[tauri::command]
+fn get_formatting_settings(state: State<AppState>, project_id: String) -> Result<Option<db::FormattingSettings>, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.get_formatting_settings(&project_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn save_formatting_settings(state: State<AppState>, settings: db::FormattingSettings) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.save_formatting_settings(&settings).map_err(|e| e.to_string())
 }
 
 // --- Plot Point Commands ---
@@ -216,6 +258,7 @@ fn import_project(state: State<AppState>, data: serde_json::Value) -> Result<db:
 fn export_epub(state: State<AppState>, project_id: String, output_path: String) -> Result<(), String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
     let (project, chapters) = db.export_project(&project_id).map_err(|e| e.to_string())?;
+    let formatting = db.get_formatting_settings(&project_id).map_err(|e| e.to_string())?;
 
     let metadata = epub::EpubMetadata {
         title: project.title,
@@ -229,10 +272,25 @@ fn export_epub(state: State<AppState>, project_id: String, output_path: String) 
         .map(|ch| epub::EpubChapter {
             title: ch.title.clone(),
             content: ch.content.clone(),
+            chapter_type: ch.chapter_type.clone(),
         })
         .collect();
 
-    epub::generate_epub(&metadata, &epub_chapters, std::path::Path::new(&output_path))
+    let epub_formatting = formatting.map(|f| epub::EpubFormatting {
+        body_font: f.body_font,
+        heading_font: f.heading_font,
+        body_size_pt: f.body_size_pt,
+        line_height: f.line_height,
+        paragraph_indent_em: f.paragraph_indent_em,
+        drop_cap_enabled: f.drop_cap_enabled,
+        drop_cap_lines: f.drop_cap_lines,
+        lead_in_style: f.lead_in_style,
+        lead_in_words: f.lead_in_words,
+        scene_break_style: f.scene_break_style,
+        justify_text: f.justify_text,
+    });
+
+    epub::generate_epub(&metadata, &epub_chapters, epub_formatting.as_ref(), std::path::Path::new(&output_path))
         .map_err(|e| e.to_string())
 }
 
@@ -240,6 +298,7 @@ fn export_epub(state: State<AppState>, project_id: String, output_path: String) 
 fn export_pdf(state: State<AppState>, project_id: String, output_path: String, trim_size: String) -> Result<(), String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
     let (project, chapters) = db.export_project(&project_id).map_err(|e| e.to_string())?;
+    let formatting = db.get_formatting_settings(&project_id).map_err(|e| e.to_string())?;
 
     let metadata = pdf::PdfMetadata {
         title: project.title,
@@ -252,10 +311,31 @@ fn export_pdf(state: State<AppState>, project_id: String, output_path: String, t
         .map(|ch| pdf::PdfChapter {
             title: ch.title.clone(),
             content: ch.content.clone(),
+            chapter_type: ch.chapter_type.clone(),
         })
         .collect();
 
-    pdf::generate_print_html(&metadata, &pdf_chapters, std::path::Path::new(&output_path))
+    let pdf_formatting = formatting.map(|f| pdf::PdfFormatting {
+        body_font: f.body_font,
+        heading_font: f.heading_font,
+        body_size_pt: f.body_size_pt,
+        heading_size_pt: f.heading_size_pt,
+        line_height: f.line_height,
+        paragraph_spacing_em: f.paragraph_spacing_em,
+        paragraph_indent_em: f.paragraph_indent_em,
+        margin_top_in: f.margin_top_in,
+        margin_bottom_in: f.margin_bottom_in,
+        margin_inner_in: f.margin_inner_in,
+        margin_outer_in: f.margin_outer_in,
+        drop_cap_enabled: f.drop_cap_enabled,
+        drop_cap_lines: f.drop_cap_lines,
+        lead_in_style: f.lead_in_style,
+        lead_in_words: f.lead_in_words,
+        scene_break_style: f.scene_break_style,
+        justify_text: f.justify_text,
+    });
+
+    pdf::generate_print_html(&metadata, &pdf_chapters, pdf_formatting.as_ref(), std::path::Path::new(&output_path))
         .map_err(|e| e.to_string())
 }
 
@@ -281,6 +361,9 @@ pub fn run() {
             update_project,
             delete_project,
             create_chapter,
+            create_section,
+            update_section_type,
+            update_chapter_parent,
             list_chapters,
             update_chapter_content,
             update_chapter_title,
@@ -290,6 +373,8 @@ pub fn run() {
             merge_chapters,
             export_project,
             import_project,
+            get_formatting_settings,
+            save_formatting_settings,
             create_plot_point,
             list_plot_points,
             update_plot_point,
