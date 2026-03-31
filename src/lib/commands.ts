@@ -231,6 +231,55 @@ export function exportPdf(projectId: string, outputPath: string, trimSize: strin
   return invoke("export_pdf", { projectId, outputPath, trimSize });
 }
 
+// --- Writing Goals ---
+
+export interface WritingGoal {
+  id: string;
+  project_id: string;
+  target_word_count: number;
+  deadline: string;
+  created_at: string;
+}
+
+export interface DailyLog {
+  id: string;
+  project_id: string;
+  date: string;
+  word_count: number;
+  words_written: number;
+  minutes_active: number;
+}
+
+export function getWritingGoal(projectId: string): Promise<WritingGoal | null> {
+  return invoke("get_writing_goal", { projectId });
+}
+
+export function saveWritingGoal(goal: WritingGoal): Promise<void> {
+  return invoke("save_writing_goal", { goal });
+}
+
+export function deleteWritingGoal(projectId: string): Promise<void> {
+  return invoke("delete_writing_goal", { projectId });
+}
+
+export function logDailyWords(
+  projectId: string,
+  date: string,
+  wordCount: number,
+  wordsWritten: number,
+  minutesActive: number,
+): Promise<DailyLog> {
+  return invoke("log_daily_words", { projectId, date, wordCount, wordsWritten, minutesActive });
+}
+
+export function listDailyLogs(projectId: string): Promise<DailyLog[]> {
+  return invoke("list_daily_logs", { projectId });
+}
+
+export function getDailyLog(projectId: string, date: string): Promise<DailyLog | null> {
+  return invoke("get_daily_log", { projectId, date });
+}
+
 // --- Templates ---
 
 export interface BookTemplate {

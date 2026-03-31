@@ -52,6 +52,25 @@ pub struct FormattingSettings {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WritingGoal {
+    pub id: String,
+    pub project_id: String,
+    pub target_word_count: i32,
+    pub deadline: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DailyLog {
+    pub id: String,
+    pub project_id: String,
+    pub date: String,
+    pub word_count: i32,
+    pub words_written: i32,
+    pub minutes_active: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PlotPoint {
     pub id: String,
     pub project_id: String,
@@ -173,6 +192,26 @@ impl Database {
                 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS writing_goals (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL UNIQUE,
+                target_word_count INTEGER NOT NULL DEFAULT 80000,
+                deadline TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS daily_logs (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                date TEXT NOT NULL,
+                word_count INTEGER NOT NULL DEFAULT 0,
+                words_written INTEGER NOT NULL DEFAULT 0,
+                minutes_active INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+            );
+
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_logs_date ON daily_logs(project_id, date);
             CREATE INDEX IF NOT EXISTS idx_plot_points_project ON plot_points(project_id);
             CREATE INDEX IF NOT EXISTS idx_characters_project ON characters(project_id);"
         )?;
@@ -238,6 +277,8 @@ impl Database {
     pub fn delete_project(&self, id: &str) -> Result<()> {
         self.conn.execute("DELETE FROM chapters WHERE project_id = ?1", params![id])?;
         self.conn.execute("DELETE FROM formatting_settings WHERE project_id = ?1", params![id])?;
+        self.conn.execute("DELETE FROM writing_goals WHERE project_id = ?1", params![id])?;
+        self.conn.execute("DELETE FROM daily_logs WHERE project_id = ?1", params![id])?;
         self.conn.execute("DELETE FROM projects WHERE id = ?1", params![id])?;
         Ok(())
     }
@@ -523,6 +564,107 @@ impl Database {
             ],
         )?;
         Ok(())
+    }
+
+    // --- Writing Goals ---
+
+    pub fn get_writing_goal(&self, project_id: &str) -> Result<Option<WritingGoal>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, project_id, target_word_count, deadline, created_at FROM writing_goals WHERE project_id = ?1"
+        )?;
+        let mut rows = stmt.query_map(params![project_id], |row| {
+            Ok(WritingGoal {
+                id: row.get(0)?,
+                project_id: row.get(1)?,
+                target_word_count: row.get(2)?,
+                deadline: row.get(3)?,
+                created_at: row.get(4)?,
+            })
+        })?;
+        match rows.next() {
+            Some(Ok(goal)) => Ok(Some(goal)),
+            Some(Err(e)) => Err(e),
+            None => Ok(None),
+        }
+    }
+
+    pub fn save_writing_goal(&self, goal: &WritingGoal) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO writing_goals (id, project_id, target_word_count, deadline, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(project_id) DO UPDATE SET
+                target_word_count = excluded.target_word_count,
+                deadline = excluded.deadline",
+            params![goal.id, goal.project_id, goal.target_word_count, goal.deadline, goal.created_at],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_writing_goal(&self, project_id: &str) -> Result<()> {
+        self.conn.execute("DELETE FROM writing_goals WHERE project_id = ?1", params![project_id])?;
+        Ok(())
+    }
+
+    // --- Daily Logs ---
+
+    pub fn log_daily_words(&self, id: &str, project_id: &str, date: &str, word_count: i32, words_written: i32, minutes_active: i32) -> Result<DailyLog> {
+        self.conn.execute(
+            "INSERT INTO daily_logs (id, project_id, date, word_count, words_written, minutes_active)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(project_id, date) DO UPDATE SET
+                word_count = excluded.word_count,
+                words_written = excluded.words_written,
+                minutes_active = excluded.minutes_active",
+            params![id, project_id, date, word_count, words_written, minutes_active],
+        )?;
+        Ok(DailyLog {
+            id: id.to_string(),
+            project_id: project_id.to_string(),
+            date: date.to_string(),
+            word_count,
+            words_written,
+            minutes_active,
+        })
+    }
+
+    pub fn list_daily_logs(&self, project_id: &str) -> Result<Vec<DailyLog>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, project_id, date, word_count, words_written, minutes_active
+             FROM daily_logs WHERE project_id = ?1 ORDER BY date ASC"
+        )?;
+        let rows = stmt.query_map(params![project_id], |row| {
+            Ok(DailyLog {
+                id: row.get(0)?,
+                project_id: row.get(1)?,
+                date: row.get(2)?,
+                word_count: row.get(3)?,
+                words_written: row.get(4)?,
+                minutes_active: row.get(5)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn get_daily_log(&self, project_id: &str, date: &str) -> Result<Option<DailyLog>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, project_id, date, word_count, words_written, minutes_active
+             FROM daily_logs WHERE project_id = ?1 AND date = ?2"
+        )?;
+        let mut rows = stmt.query_map(params![project_id, date], |row| {
+            Ok(DailyLog {
+                id: row.get(0)?,
+                project_id: row.get(1)?,
+                date: row.get(2)?,
+                word_count: row.get(3)?,
+                words_written: row.get(4)?,
+                minutes_active: row.get(5)?,
+            })
+        })?;
+        match rows.next() {
+            Some(Ok(log)) => Ok(Some(log)),
+            Some(Err(e)) => Err(e),
+            None => Ok(None),
+        }
     }
 
     // --- Backup ---
