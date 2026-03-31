@@ -64,3 +64,33 @@ export function reorderChapters(chapterIds: string[]): Promise<void> {
 export function deleteChapter(id: string): Promise<void> {
   return invoke("delete_chapter", { id });
 }
+
+export function splitChapter(
+  id: string,
+  newTitle: string,
+  originalContent: string,
+  originalWordCount: number,
+  newContent: string,
+  newWordCount: number
+): Promise<Chapter> {
+  return invoke("split_chapter", { id, newTitle, originalContent, originalWordCount, newContent, newWordCount });
+}
+
+export function mergeChapters(
+  keepId: string,
+  removeId: string,
+  mergedContent: string,
+  mergedWordCount: number
+): Promise<void> {
+  return invoke("merge_chapters", { keepId, removeId, mergedContent, mergedWordCount });
+}
+
+// --- Backup ---
+
+export function exportProject(projectId: string): Promise<unknown> {
+  return invoke("export_project", { projectId });
+}
+
+export function importProject(data: unknown): Promise<Project> {
+  return invoke("import_project", { data });
+}

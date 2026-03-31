@@ -74,6 +74,67 @@ fn delete_chapter(state: State<AppState>, id: String) -> Result<(), String> {
     db.delete_chapter(&id).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn split_chapter(
+    state: State<AppState>,
+    id: String,
+    new_title: String,
+    original_content: String,
+    original_word_count: i32,
+    new_content: String,
+    new_word_count: i32,
+) -> Result<db::Chapter, String> {
+    let new_id = uuid::Uuid::new_v4().to_string();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.split_chapter(&id, &new_id, &new_title, &original_content, original_word_count, &new_content, new_word_count)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn merge_chapters(
+    state: State<AppState>,
+    keep_id: String,
+    remove_id: String,
+    merged_content: String,
+    merged_word_count: i32,
+) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.merge_chapters(&keep_id, &remove_id, &merged_content, merged_word_count)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn export_project(state: State<AppState>, project_id: String) -> Result<serde_json::Value, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let (project, chapters) = db.export_project(&project_id).map_err(|e| e.to_string())?;
+    serde_json::to_value(serde_json::json!({
+        "version": "1.0",
+        "project": project,
+        "chapters": chapters,
+    }))
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn import_project(state: State<AppState>, data: serde_json::Value) -> Result<db::Project, String> {
+    let project: db::Project = serde_json::from_value(
+        data.get("project").ok_or("Missing project field")?.clone(),
+    )
+    .map_err(|e| e.to_string())?;
+    let chapters: Vec<db::Chapter> = serde_json::from_value(
+        data.get("chapters").ok_or("Missing chapters field")?.clone(),
+    )
+    .map_err(|e| e.to_string())?;
+
+    // Generate a new ID so imports don't collide
+    let mut imported = project.clone();
+    imported.id = uuid::Uuid::new_v4().to_string();
+
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.import_project(&imported, &chapters).map_err(|e| e.to_string())?;
+    Ok(imported)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app_dir = dirs_next::data_dir()
@@ -100,6 +161,10 @@ pub fn run() {
             update_chapter_title,
             reorder_chapters,
             delete_chapter,
+            split_chapter,
+            merge_chapters,
+            export_project,
+            import_project,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

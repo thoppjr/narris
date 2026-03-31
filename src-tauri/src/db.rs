@@ -198,4 +198,110 @@ impl Database {
         self.conn.execute("DELETE FROM chapters WHERE id = ?1", params![id])?;
         Ok(())
     }
+
+    pub fn split_chapter(&self, id: &str, new_id: &str, new_title: &str, original_content: &str, original_word_count: i32, new_content: &str, new_word_count: i32) -> Result<Chapter> {
+        let now = chrono::Utc::now().to_rfc3339();
+
+        // Update the original chapter with truncated content
+        self.conn.execute(
+            "UPDATE chapters SET content = ?1, word_count = ?2, updated_at = ?3 WHERE id = ?4",
+            params![original_content, original_word_count, now, id],
+        )?;
+
+        // Get original chapter info for project_id and sort_order
+        let (project_id, sort_order): (String, i32) = self.conn.query_row(
+            "SELECT project_id, sort_order FROM chapters WHERE id = ?1",
+            params![id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+
+        // Bump sort_order for all chapters after this one
+        self.conn.execute(
+            "UPDATE chapters SET sort_order = sort_order + 1 WHERE project_id = ?1 AND sort_order > ?2",
+            params![project_id, sort_order],
+        )?;
+
+        // Insert new chapter right after
+        let new_sort = sort_order + 1;
+        self.conn.execute(
+            "INSERT INTO chapters (id, project_id, title, content, sort_order, chapter_type, word_count, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, 'chapter', ?6, ?7, ?7)",
+            params![new_id, project_id, new_title, new_content, new_sort, new_word_count, now],
+        )?;
+
+        Ok(Chapter {
+            id: new_id.to_string(),
+            project_id,
+            title: new_title.to_string(),
+            content: new_content.to_string(),
+            sort_order: new_sort,
+            chapter_type: "chapter".to_string(),
+            word_count: new_word_count,
+            created_at: now.clone(),
+            updated_at: now,
+        })
+    }
+
+    pub fn merge_chapters(&self, keep_id: &str, remove_id: &str, merged_content: &str, merged_word_count: i32) -> Result<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+
+        // Update the kept chapter with merged content
+        self.conn.execute(
+            "UPDATE chapters SET content = ?1, word_count = ?2, updated_at = ?3 WHERE id = ?4",
+            params![merged_content, merged_word_count, now, keep_id],
+        )?;
+
+        // Get the removed chapter's sort_order and project_id
+        let (project_id, removed_order): (String, i32) = self.conn.query_row(
+            "SELECT project_id, sort_order FROM chapters WHERE id = ?1",
+            params![remove_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+
+        // Delete the removed chapter
+        self.conn.execute("DELETE FROM chapters WHERE id = ?1", params![remove_id])?;
+
+        // Re-compact sort orders
+        self.conn.execute(
+            "UPDATE chapters SET sort_order = sort_order - 1 WHERE project_id = ?1 AND sort_order > ?2",
+            params![project_id, removed_order],
+        )?;
+
+        Ok(())
+    }
+
+    // --- Backup ---
+
+    pub fn export_project(&self, project_id: &str) -> Result<(Project, Vec<Chapter>)> {
+        let project: Project = self.conn.query_row(
+            "SELECT id, title, author, genre, created_at, updated_at FROM projects WHERE id = ?1",
+            params![project_id],
+            |row| Ok(Project {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                author: row.get(2)?,
+                genre: row.get(3)?,
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
+            }),
+        )?;
+        let chapters = self.list_chapters(project_id)?;
+        Ok((project, chapters))
+    }
+
+    pub fn import_project(&self, project: &Project, chapters: &[Chapter]) -> Result<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+        self.conn.execute(
+            "INSERT INTO projects (id, title, author, genre, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![project.id, project.title, project.author, project.genre, now, now],
+        )?;
+        for ch in chapters {
+            self.conn.execute(
+                "INSERT INTO chapters (id, project_id, title, content, sort_order, chapter_type, word_count, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
+                params![uuid::Uuid::new_v4().to_string(), project.id, ch.title, ch.content, ch.sort_order, ch.chapter_type, ch.word_count, now],
+            )?;
+        }
+        Ok(())
+    }
 }

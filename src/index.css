@@ -71,6 +71,35 @@ body {
   padding: 0;
 }
 
+/* Dark mode */
+.dark body,
+.dark {
+  color: #e8e0d4;
+  background-color: #1a1a1a;
+}
+
+.dark .bg-white { background-color: #222 !important; }
+.dark .bg-sand-50 { background-color: #1a1a1a !important; }
+.dark .bg-sand-100 { background-color: #1e1e1e !important; }
+.dark .border-sand-200 { border-color: #333 !important; }
+.dark .text-stone-800 { color: #e8e0d4 !important; }
+.dark .text-stone-700 { color: #d4c8b8 !important; }
+.dark .text-stone-600 { color: #b8a690 !important; }
+.dark .text-ink { color: #e8e0d4 !important; }
+.dark .text-ink-muted { color: #8a8a7a !important; }
+.dark .text-ink-light { color: #b0b0a0 !important; }
+.dark .placeholder-ink-muted::placeholder { color: #666 !important; }
+
+.dark input, .dark textarea {
+  background-color: #2a2a2a !important;
+  border-color: #444 !important;
+  color: #e8e0d4 !important;
+}
+
+.dark .hover\:bg-sand-100:hover { background-color: #2a2a2a !important; }
+.dark .bg-sage-100 { background-color: #2c3a2c !important; }
+.dark .border-sage-300 { border-color: #3a4d3a !important; }
+
 /* TipTap editor styles */
 .tiptap {
   outline: none;
@@ -79,6 +108,24 @@ body {
   font-size: 1.125rem;
   line-height: 1.8;
   color: var(--color-ink);
+}
+
+.dark .tiptap {
+  color: #e8e0d4;
+}
+
+.dark .tiptap h2,
+.dark .tiptap h3 {
+  color: #d4c8b8;
+}
+
+.dark .tiptap blockquote {
+  border-left-color: #555;
+  color: #aaa;
+}
+
+.dark .tiptap code {
+  background-color: #333;
 }
 
 .tiptap p {
