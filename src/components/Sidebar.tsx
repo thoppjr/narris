@@ -20,6 +20,8 @@ import { useState } from "react";
 interface SidebarProps {
   projectTitle: string;
   onBack: () => void;
+  onShowPlot: () => void;
+  onShowCharacters: () => void;
 }
 
 function SortableChapter({
@@ -100,7 +102,7 @@ function SortableChapter({
   );
 }
 
-export default function Sidebar({ projectTitle, onBack }: SidebarProps) {
+export default function Sidebar({ projectTitle, onBack, onShowPlot, onShowCharacters }: SidebarProps) {
   const { chapters, activeChapterId, createChapter, deleteChapter, setActiveChapter, reorder } =
     useChapterStore();
   const [newTitle, setNewTitle] = useState("");
@@ -137,9 +139,9 @@ export default function Sidebar({ projectTitle, onBack }: SidebarProps) {
   const totalWords = chapters.reduce((sum, ch) => sum + ch.word_count, 0);
 
   return (
-    <div className="w-64 h-full bg-sand-100 border-r border-sand-200 flex flex-col">
+    <div className="w-64 h-full bg-sand-100 dark:bg-stone-900 border-r border-sand-200 dark:border-stone-700 flex flex-col">
       {/* Project header */}
-      <div className="p-4 border-b border-sand-200">
+      <div className="p-4 border-b border-sand-200 dark:border-stone-700">
         <button
           onClick={onBack}
           className="flex items-center gap-1.5 text-sm text-ink-muted hover:text-ink
@@ -156,6 +158,22 @@ export default function Sidebar({ projectTitle, onBack }: SidebarProps) {
         <div className="text-xs text-ink-muted mt-0.5">
           {totalWords.toLocaleString()} words
         </div>
+      </div>
+
+      {/* Tools */}
+      <div className="px-3 py-2 border-b border-sand-200 dark:border-stone-700 flex gap-2">
+        <button
+          onClick={onShowPlot}
+          className="flex-1 px-2 py-1.5 text-xs rounded-lg bg-sand-200 dark:bg-stone-700 text-stone-600 dark:text-sand-300 hover:bg-sand-300 dark:hover:bg-stone-600 transition-colors text-center"
+        >
+          Plot Points
+        </button>
+        <button
+          onClick={onShowCharacters}
+          className="flex-1 px-2 py-1.5 text-xs rounded-lg bg-sand-200 dark:bg-stone-700 text-stone-600 dark:text-sand-300 hover:bg-sand-300 dark:hover:bg-stone-600 transition-colors text-center"
+        >
+          Characters
+        </button>
       </div>
 
       {/* Chapter list */}
@@ -185,7 +203,7 @@ export default function Sidebar({ projectTitle, onBack }: SidebarProps) {
       </div>
 
       {/* Add chapter */}
-      <div className="p-3 border-t border-sand-200">
+      <div className="p-3 border-t border-sand-200 dark:border-stone-700">
         <div className="flex gap-2">
           <input
             type="text"

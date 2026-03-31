@@ -14,6 +14,8 @@ interface ChapterStore {
   updateContent: (id: string, content: string, wordCount: number) => Promise<void>;
   updateTitle: (id: string, title: string) => Promise<void>;
   reorder: (chapterIds: string[]) => Promise<void>;
+  splitChapter: (id: string, newTitle: string, originalContent: string, originalWordCount: number, newContent: string, newWordCount: number) => Promise<void>;
+  mergeWithNext: (id: string) => Promise<void>;
   clear: () => void;
 }
 
@@ -92,6 +94,33 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
         .filter((c): c is Chapter => c !== null);
       return { chapters: reordered };
     });
+  },
+
+  splitChapter: async (id, newTitle, originalContent, originalWordCount, newContent, newWordCount) => {
+    const newChapter = await cmd.splitChapter(id, newTitle, originalContent, originalWordCount, newContent, newWordCount);
+    // Reload to get correct sort orders
+    const projectId = get().chapters.find((c) => c.id === id)?.project_id;
+    if (projectId) {
+      const chapters = await cmd.listChapters(projectId);
+      set({ chapters, activeChapterId: newChapter.id });
+    }
+  },
+
+  mergeWithNext: async (id) => {
+    const { chapters } = get();
+    const idx = chapters.findIndex((c) => c.id === id);
+    if (idx === -1 || idx >= chapters.length - 1) return;
+
+    const current = chapters[idx];
+    const next = chapters[idx + 1];
+    const mergedContent = current.content + next.content;
+    const mergedWordCount = current.word_count + next.word_count;
+
+    await cmd.mergeChapters(current.id, next.id, mergedContent, mergedWordCount);
+
+    const projectId = current.project_id;
+    const updatedChapters = await cmd.listChapters(projectId);
+    set({ chapters: updatedChapters, activeChapterId: current.id });
   },
 
   clear: () => {

@@ -74,6 +74,140 @@ fn delete_chapter(state: State<AppState>, id: String) -> Result<(), String> {
     db.delete_chapter(&id).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn split_chapter(
+    state: State<AppState>,
+    id: String,
+    new_title: String,
+    original_content: String,
+    original_word_count: i32,
+    new_content: String,
+    new_word_count: i32,
+) -> Result<db::Chapter, String> {
+    let new_id = uuid::Uuid::new_v4().to_string();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.split_chapter(&id, &new_id, &new_title, &original_content, original_word_count, &new_content, new_word_count)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn merge_chapters(
+    state: State<AppState>,
+    keep_id: String,
+    remove_id: String,
+    merged_content: String,
+    merged_word_count: i32,
+) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.merge_chapters(&keep_id, &remove_id, &merged_content, merged_word_count)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn export_project(state: State<AppState>, project_id: String) -> Result<serde_json::Value, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let (project, chapters) = db.export_project(&project_id).map_err(|e| e.to_string())?;
+    serde_json::to_value(serde_json::json!({
+        "version": "1.0",
+        "project": project,
+        "chapters": chapters,
+    }))
+    .map_err(|e| e.to_string())
+}
+
+// --- Plot Point Commands ---
+
+#[tauri::command]
+fn create_plot_point(state: State<AppState>, project_id: String, title: String, pos_x: f64, pos_y: f64) -> Result<db::PlotPoint, String> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.create_plot_point(&id, &project_id, &title, pos_x, pos_y).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn list_plot_points(state: State<AppState>, project_id: String) -> Result<Vec<db::PlotPoint>, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.list_plot_points(&project_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn update_plot_point(state: State<AppState>, id: String, title: String, description: String, color: String, pos_x: f64, pos_y: f64) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.update_plot_point(&id, &title, &description, &color, pos_x, pos_y).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_plot_point(state: State<AppState>, id: String) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.delete_plot_point(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn create_plot_connection(state: State<AppState>, project_id: String, source_id: String, target_id: String) -> Result<db::PlotConnection, String> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.create_plot_connection(&id, &project_id, &source_id, &target_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn list_plot_connections(state: State<AppState>, project_id: String) -> Result<Vec<db::PlotConnection>, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.list_plot_connections(&project_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_plot_connection(state: State<AppState>, id: String) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.delete_plot_connection(&id).map_err(|e| e.to_string())
+}
+
+// --- Character Commands ---
+
+#[tauri::command]
+fn create_character(state: State<AppState>, project_id: String, name: String) -> Result<db::Character, String> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.create_character(&id, &project_id, &name).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn list_characters(state: State<AppState>, project_id: String) -> Result<Vec<db::Character>, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.list_characters(&project_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn update_character(state: State<AppState>, id: String, name: String, fields: String) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.update_character(&id, &name, &fields).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_character(state: State<AppState>, id: String) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.delete_character(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn import_project(state: State<AppState>, data: serde_json::Value) -> Result<db::Project, String> {
+    let project: db::Project = serde_json::from_value(
+        data.get("project").ok_or("Missing project field")?.clone(),
+    )
+    .map_err(|e| e.to_string())?;
+    let chapters: Vec<db::Chapter> = serde_json::from_value(
+        data.get("chapters").ok_or("Missing chapters field")?.clone(),
+    )
+    .map_err(|e| e.to_string())?;
+
+    // Generate a new ID so imports don't collide
+    let mut imported = project.clone();
+    imported.id = uuid::Uuid::new_v4().to_string();
+
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.import_project(&imported, &chapters).map_err(|e| e.to_string())?;
+    Ok(imported)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app_dir = dirs_next::data_dir()
@@ -100,6 +234,21 @@ pub fn run() {
             update_chapter_title,
             reorder_chapters,
             delete_chapter,
+            split_chapter,
+            merge_chapters,
+            export_project,
+            import_project,
+            create_plot_point,
+            list_plot_points,
+            update_plot_point,
+            delete_plot_point,
+            create_plot_connection,
+            list_plot_connections,
+            delete_plot_connection,
+            create_character,
+            list_characters,
+            update_character,
+            delete_character,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
