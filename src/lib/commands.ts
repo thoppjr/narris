@@ -166,3 +166,13 @@ export function exportProject(projectId: string): Promise<unknown> {
 export function importProject(data: unknown): Promise<Project> {
   return invoke("import_project", { data });
 }
+
+// --- Export ---
+
+export function exportEpub(projectId: string, outputPath: string): Promise<void> {
+  return invoke("export_epub", { projectId, outputPath });
+}
+
+export function exportPdf(projectId: string, outputPath: string, trimSize: string): Promise<void> {
+  return invoke("export_pdf", { projectId, outputPath, trimSize });
+}

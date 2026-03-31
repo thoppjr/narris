@@ -3,6 +3,7 @@ import Sidebar from "./Sidebar";
 import Editor from "./Editor";
 import PlotCanvas from "./PlotCanvas";
 import CharacterSheets from "./CharacterSheets";
+import ExportDialog from "./ExportDialog";
 import { useChapterStore } from "../stores/chapterStore";
 import { useProjectStore } from "../stores/projectStore";
 
@@ -19,6 +20,7 @@ export default function EditorView({ projectId, onBack }: EditorViewProps) {
     s.projects.find((p) => p.id === projectId)
   );
   const [view, setView] = useState<View>("editor");
+  const [showExport, setShowExport] = useState(false);
 
   useEffect(() => {
     loadChapters(projectId).then(async () => {
@@ -50,8 +52,15 @@ export default function EditorView({ projectId, onBack }: EditorViewProps) {
         }}
         onShowPlot={() => setView("plot")}
         onShowCharacters={() => setView("characters")}
+        onExport={() => setShowExport(true)}
       />
       <Editor />
+      <ExportDialog
+        projectId={projectId}
+        projectTitle={project.title}
+        isOpen={showExport}
+        onClose={() => setShowExport(false)}
+      />
     </div>
   );
 }

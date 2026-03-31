@@ -22,6 +22,7 @@ interface SidebarProps {
   onBack: () => void;
   onShowPlot: () => void;
   onShowCharacters: () => void;
+  onExport: () => void;
 }
 
 function SortableChapter({
@@ -102,7 +103,7 @@ function SortableChapter({
   );
 }
 
-export default function Sidebar({ projectTitle, onBack, onShowPlot, onShowCharacters }: SidebarProps) {
+export default function Sidebar({ projectTitle, onBack, onShowPlot, onShowCharacters, onExport }: SidebarProps) {
   const { chapters, activeChapterId, createChapter, deleteChapter, setActiveChapter, reorder } =
     useChapterStore();
   const [newTitle, setNewTitle] = useState("");
@@ -161,18 +162,26 @@ export default function Sidebar({ projectTitle, onBack, onShowPlot, onShowCharac
       </div>
 
       {/* Tools */}
-      <div className="px-3 py-2 border-b border-sand-200 dark:border-stone-700 flex gap-2">
+      <div className="px-3 py-2 border-b border-sand-200 dark:border-stone-700 space-y-1.5">
+        <div className="flex gap-2">
+          <button
+            onClick={onShowPlot}
+            className="flex-1 px-2 py-1.5 text-xs rounded-lg bg-sand-200 dark:bg-stone-700 text-stone-600 dark:text-sand-300 hover:bg-sand-300 dark:hover:bg-stone-600 transition-colors text-center"
+          >
+            Plot Points
+          </button>
+          <button
+            onClick={onShowCharacters}
+            className="flex-1 px-2 py-1.5 text-xs rounded-lg bg-sand-200 dark:bg-stone-700 text-stone-600 dark:text-sand-300 hover:bg-sand-300 dark:hover:bg-stone-600 transition-colors text-center"
+          >
+            Characters
+          </button>
+        </div>
         <button
-          onClick={onShowPlot}
-          className="flex-1 px-2 py-1.5 text-xs rounded-lg bg-sand-200 dark:bg-stone-700 text-stone-600 dark:text-sand-300 hover:bg-sand-300 dark:hover:bg-stone-600 transition-colors text-center"
+          onClick={onExport}
+          className="w-full px-2 py-1.5 text-xs rounded-lg bg-clay-200 dark:bg-clay-800 text-clay-700 dark:text-clay-200 hover:bg-clay-300 dark:hover:bg-clay-700 transition-colors text-center"
         >
-          Plot Points
-        </button>
-        <button
-          onClick={onShowCharacters}
-          className="flex-1 px-2 py-1.5 text-xs rounded-lg bg-sand-200 dark:bg-stone-700 text-stone-600 dark:text-sand-300 hover:bg-sand-300 dark:hover:bg-stone-600 transition-colors text-center"
-        >
-          Characters
+          Export Book
         </button>
       </div>
 

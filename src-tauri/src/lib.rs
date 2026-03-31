@@ -1,4 +1,6 @@
 mod db;
+mod epub;
+mod pdf;
 
 use db::Database;
 use std::sync::Mutex;
@@ -208,6 +210,55 @@ fn import_project(state: State<AppState>, data: serde_json::Value) -> Result<db:
     Ok(imported)
 }
 
+// --- Export Commands ---
+
+#[tauri::command]
+fn export_epub(state: State<AppState>, project_id: String, output_path: String) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let (project, chapters) = db.export_project(&project_id).map_err(|e| e.to_string())?;
+
+    let metadata = epub::EpubMetadata {
+        title: project.title,
+        author: project.author,
+        language: "en".to_string(),
+        identifier: format!("urn:uuid:{}", project.id),
+    };
+
+    let epub_chapters: Vec<epub::EpubChapter> = chapters
+        .iter()
+        .map(|ch| epub::EpubChapter {
+            title: ch.title.clone(),
+            content: ch.content.clone(),
+        })
+        .collect();
+
+    epub::generate_epub(&metadata, &epub_chapters, std::path::Path::new(&output_path))
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn export_pdf(state: State<AppState>, project_id: String, output_path: String, trim_size: String) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let (project, chapters) = db.export_project(&project_id).map_err(|e| e.to_string())?;
+
+    let metadata = pdf::PdfMetadata {
+        title: project.title,
+        author: project.author,
+        trim_size,
+    };
+
+    let pdf_chapters: Vec<pdf::PdfChapter> = chapters
+        .iter()
+        .map(|ch| pdf::PdfChapter {
+            title: ch.title.clone(),
+            content: ch.content.clone(),
+        })
+        .collect();
+
+    pdf::generate_print_html(&metadata, &pdf_chapters, std::path::Path::new(&output_path))
+        .map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app_dir = dirs_next::data_dir()
@@ -220,6 +271,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(AppState {
             db: Mutex::new(database),
         })
@@ -249,6 +301,8 @@ pub fn run() {
             list_characters,
             update_character,
             delete_character,
+            export_epub,
+            export_pdf,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
