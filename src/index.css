@@ -178,6 +178,32 @@ body {
   pointer-events: none;
 }
 
+/* Form input styling */
+.input-field {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-sand-200);
+  background: white;
+  color: var(--color-ink);
+  outline: none;
+  transition: all 0.15s;
+}
+.input-field:focus {
+  border-color: var(--color-sage-400);
+  box-shadow: 0 0 0 2px rgba(125, 150, 125, 0.2);
+}
+.dark .input-field {
+  background: #2a2a2a;
+  border-color: #444;
+  color: #e8e0d4;
+}
+.dark .input-field:focus {
+  border-color: var(--color-sage-500);
+  box-shadow: 0 0 0 2px rgba(125, 150, 125, 0.3);
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;
