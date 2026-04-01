@@ -27,6 +27,9 @@ interface SidebarProps {
   onShowFormatting: () => void;
   onShowHabits: () => void;
   onShowPreview: () => void;
+  onShowThemes: () => void;
+  onShowMasterPages: () => void;
+  onShowImages: () => void;
 }
 
 const SECTION_TYPE_LABELS: Record<string, string> = {
@@ -158,7 +161,7 @@ function SortableChapter({
   );
 }
 
-export default function Sidebar({ projectTitle, onBack, onShowPlot, onShowCharacters, onExport, onShowFormatting, onShowHabits, onShowPreview }: SidebarProps) {
+export default function Sidebar({ projectTitle, onBack, onShowPlot, onShowCharacters, onExport, onShowFormatting, onShowHabits, onShowPreview, onShowThemes, onShowMasterPages, onShowImages }: SidebarProps) {
   const { chapters, activeChapterId, createChapter, createSection, deleteChapter, setActiveChapter, reorder } =
     useChapterStore();
   const [newTitle, setNewTitle] = useState("");
@@ -262,11 +265,33 @@ export default function Sidebar({ projectTitle, onBack, onShowPlot, onShowCharac
         </div>
         <div className="flex gap-2">
           <button
+            onClick={onShowThemes}
+            className="flex-1 px-2 py-1.5 text-xs rounded-lg bg-sand-200 dark:bg-stone-700 text-stone-600 dark:text-sand-300 hover:bg-sand-300 dark:hover:bg-stone-600 transition-colors text-center"
+          >
+            Themes
+          </button>
+          <button
+            onClick={onShowImages}
+            className="flex-1 px-2 py-1.5 text-xs rounded-lg bg-sand-200 dark:bg-stone-700 text-stone-600 dark:text-sand-300 hover:bg-sand-300 dark:hover:bg-stone-600 transition-colors text-center"
+          >
+            Images
+          </button>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={onShowMasterPages}
+            className="flex-1 px-2 py-1.5 text-xs rounded-lg bg-sand-200 dark:bg-stone-700 text-stone-600 dark:text-sand-300 hover:bg-sand-300 dark:hover:bg-stone-600 transition-colors text-center"
+          >
+            Pages
+          </button>
+          <button
             onClick={onShowHabits}
             className="flex-1 px-2 py-1.5 text-xs rounded-lg bg-sand-200 dark:bg-stone-700 text-stone-600 dark:text-sand-300 hover:bg-sand-300 dark:hover:bg-stone-600 transition-colors text-center"
           >
             Goals
           </button>
+        </div>
+        <div className="flex gap-2">
           <button
             onClick={onExport}
             className="flex-1 px-2 py-1.5 text-xs rounded-lg bg-clay-200 dark:bg-clay-800 text-clay-700 dark:text-clay-200 hover:bg-clay-300 dark:hover:bg-clay-700 transition-colors text-center"

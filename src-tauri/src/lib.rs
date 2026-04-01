@@ -1,4 +1,5 @@
 mod db;
+mod docx;
 mod epub;
 mod pdf;
 
@@ -299,6 +300,80 @@ fn get_daily_log(state: State<AppState>, project_id: String, date: String) -> Re
     db.get_daily_log(&project_id, &date).map_err(|e| e.to_string())
 }
 
+// --- Custom Theme Commands ---
+
+#[tauri::command]
+fn create_custom_theme(state: State<AppState>, name: String, description: String, settings_json: String) -> Result<db::CustomTheme, String> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.create_custom_theme(&id, &name, &description, &settings_json).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn list_custom_themes(state: State<AppState>) -> Result<Vec<db::CustomTheme>, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.list_custom_themes().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn update_custom_theme(state: State<AppState>, id: String, name: String, description: String, settings_json: String) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.update_custom_theme(&id, &name, &description, &settings_json).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_custom_theme(state: State<AppState>, id: String) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.delete_custom_theme(&id).map_err(|e| e.to_string())
+}
+
+// --- Master Page Commands ---
+
+#[tauri::command]
+fn create_master_page(state: State<AppState>, name: String, page_type: String, content: String, settings_json: String) -> Result<db::MasterPage, String> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.create_master_page(&id, &name, &page_type, &content, &settings_json).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn list_master_pages(state: State<AppState>) -> Result<Vec<db::MasterPage>, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.list_master_pages().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn update_master_page(state: State<AppState>, id: String, name: String, content: String, settings_json: String) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.update_master_page(&id, &name, &content, &settings_json).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_master_page(state: State<AppState>, id: String) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.delete_master_page(&id).map_err(|e| e.to_string())
+}
+
+// --- Project Image Commands ---
+
+#[tauri::command]
+fn save_project_image(state: State<AppState>, image: db::ProjectImage) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.save_project_image(&image).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn list_project_images(state: State<AppState>, project_id: String) -> Result<Vec<db::ProjectImage>, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.list_project_images(&project_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_project_image(state: State<AppState>, id: String) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.delete_project_image(&id).map_err(|e| e.to_string())
+}
+
 // --- Export Commands ---
 
 #[tauri::command]
@@ -386,6 +461,110 @@ fn export_pdf(state: State<AppState>, project_id: String, output_path: String, t
         .map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn export_docx(state: State<AppState>, project_id: String, output_path: String) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let (project, chapters) = db.export_project(&project_id).map_err(|e| e.to_string())?;
+
+    let metadata = docx::DocxMetadata {
+        title: project.title,
+        author: project.author,
+    };
+
+    let docx_chapters: Vec<docx::DocxChapter> = chapters
+        .iter()
+        .map(|ch| docx::DocxChapter {
+            title: ch.title.clone(),
+            content: ch.content.clone(),
+            chapter_type: ch.chapter_type.clone(),
+        })
+        .collect();
+
+    docx::generate_docx(&metadata, &docx_chapters, std::path::Path::new(&output_path))
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn export_pdf_large_print(state: State<AppState>, project_id: String, output_path: String, trim_size: String) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let (project, chapters) = db.export_project(&project_id).map_err(|e| e.to_string())?;
+
+    let metadata = pdf::PdfMetadata {
+        title: project.title,
+        author: project.author,
+        trim_size,
+    };
+
+    let pdf_chapters: Vec<pdf::PdfChapter> = chapters
+        .iter()
+        .map(|ch| pdf::PdfChapter {
+            title: ch.title.clone(),
+            content: ch.content.clone(),
+            chapter_type: ch.chapter_type.clone(),
+        })
+        .collect();
+
+    // Large print overrides: 16pt body, 1.8 line height, sans-serif
+    let large_print = pdf::PdfFormatting {
+        body_font: "Arial".to_string(),
+        heading_font: "Arial".to_string(),
+        body_size_pt: 16.0,
+        heading_size_pt: 24.0,
+        line_height: 1.8,
+        paragraph_spacing_em: 0.5,
+        paragraph_indent_em: 1.5,
+        margin_top_in: 1.0,
+        margin_bottom_in: 1.0,
+        margin_inner_in: 1.0,
+        margin_outer_in: 0.75,
+        drop_cap_enabled: false,
+        drop_cap_lines: 3,
+        lead_in_style: "none".to_string(),
+        lead_in_words: 0,
+        scene_break_style: "asterisks".to_string(),
+        justify_text: false,
+    };
+
+    pdf::generate_print_html(&metadata, &pdf_chapters, Some(&large_print), std::path::Path::new(&output_path))
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn export_box_set_epub(state: State<AppState>, project_ids: Vec<String>, title: String, author: String, output_path: String) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+
+    let mut all_chapters: Vec<epub::EpubChapter> = Vec::new();
+
+    for (i, pid) in project_ids.iter().enumerate() {
+        let (project, chapters) = db.export_project(pid).map_err(|e| e.to_string())?;
+
+        // Add a part title for each book
+        all_chapters.push(epub::EpubChapter {
+            title: project.title.clone(),
+            content: format!("<h1>{}</h1><p>by {}</p>", project.title, project.author),
+            chapter_type: "part".to_string(),
+        });
+
+        for ch in &chapters {
+            all_chapters.push(epub::EpubChapter {
+                title: if i > 0 { format!("{} - {}", project.title, ch.title) } else { ch.title.clone() },
+                content: ch.content.clone(),
+                chapter_type: ch.chapter_type.clone(),
+            });
+        }
+    }
+
+    let metadata = epub::EpubMetadata {
+        title,
+        author,
+        language: "en".to_string(),
+        identifier: format!("urn:uuid:{}", uuid::Uuid::new_v4()),
+    };
+
+    epub::generate_epub(&metadata, &all_chapters, None, std::path::Path::new(&output_path))
+        .map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app_dir = dirs_next::data_dir()
@@ -441,6 +620,20 @@ pub fn run() {
             delete_character,
             export_epub,
             export_pdf,
+            export_docx,
+            export_pdf_large_print,
+            export_box_set_epub,
+            create_custom_theme,
+            list_custom_themes,
+            update_custom_theme,
+            delete_custom_theme,
+            create_master_page,
+            list_master_pages,
+            update_master_page,
+            delete_master_page,
+            save_project_image,
+            list_project_images,
+            delete_project_image,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

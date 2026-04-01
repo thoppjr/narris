@@ -280,6 +280,104 @@ export function getDailyLog(projectId: string, date: string): Promise<DailyLog |
   return invoke("get_daily_log", { projectId, date });
 }
 
+// --- DOCX Export ---
+
+export function exportDocx(projectId: string, outputPath: string): Promise<void> {
+  return invoke("export_docx", { projectId, outputPath });
+}
+
+// --- Large Print ---
+
+export function exportPdfLargePrint(projectId: string, outputPath: string, trimSize: string): Promise<void> {
+  return invoke("export_pdf_large_print", { projectId, outputPath, trimSize });
+}
+
+// --- Box Set ---
+
+export function exportBoxSetEpub(projectIds: string[], title: string, author: string, outputPath: string): Promise<void> {
+  return invoke("export_box_set_epub", { projectIds, title, author, outputPath });
+}
+
+// --- Custom Themes ---
+
+export interface CustomTheme {
+  id: string;
+  name: string;
+  description: string;
+  settings_json: string;
+  created_at: string;
+}
+
+export function createCustomTheme(name: string, description: string, settingsJson: string): Promise<CustomTheme> {
+  return invoke("create_custom_theme", { name, description, settingsJson });
+}
+
+export function listCustomThemes(): Promise<CustomTheme[]> {
+  return invoke("list_custom_themes");
+}
+
+export function updateCustomTheme(id: string, name: string, description: string, settingsJson: string): Promise<void> {
+  return invoke("update_custom_theme", { id, name, description, settingsJson });
+}
+
+export function deleteCustomTheme(id: string): Promise<void> {
+  return invoke("delete_custom_theme", { id });
+}
+
+// --- Master Pages ---
+
+export interface MasterPage {
+  id: string;
+  name: string;
+  page_type: string;
+  content: string;
+  settings_json: string;
+  created_at: string;
+}
+
+export function createMasterPage(name: string, pageType: string, content: string, settingsJson: string): Promise<MasterPage> {
+  return invoke("create_master_page", { name, pageType, content, settingsJson });
+}
+
+export function listMasterPages(): Promise<MasterPage[]> {
+  return invoke("list_master_pages");
+}
+
+export function updateMasterPage(id: string, name: string, content: string, settingsJson: string): Promise<void> {
+  return invoke("update_master_page", { id, name, content, settingsJson });
+}
+
+export function deleteMasterPage(id: string): Promise<void> {
+  return invoke("delete_master_page", { id });
+}
+
+// --- Project Images ---
+
+export interface ProjectImage {
+  id: string;
+  project_id: string;
+  filename: string;
+  data_base64: string;
+  mime_type: string;
+  width: number;
+  height: number;
+  caption: string;
+  layout: string;
+  created_at: string;
+}
+
+export function saveProjectImage(image: ProjectImage): Promise<void> {
+  return invoke("save_project_image", { image });
+}
+
+export function listProjectImages(projectId: string): Promise<ProjectImage[]> {
+  return invoke("list_project_images", { projectId });
+}
+
+export function deleteProjectImage(id: string): Promise<void> {
+  return invoke("delete_project_image", { id });
+}
+
 // --- Templates ---
 
 export interface BookTemplate {

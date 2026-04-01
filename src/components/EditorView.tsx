@@ -7,11 +7,14 @@ import ExportDialog from "./ExportDialog";
 import FormatPanel from "./FormatPanel";
 import WritingHabits from "./WritingHabits";
 import DevicePreviewer from "./DevicePreviewer";
+import ThemeBuilder from "./ThemeBuilder";
+import MasterPages from "./MasterPages";
+import ImageManager from "./ImageManager";
 import { useChapterStore } from "../stores/chapterStore";
 import { useProjectStore } from "../stores/projectStore";
 import { useFormattingStore } from "../stores/formattingStore";
 
-type View = "editor" | "plot" | "characters" | "formatting" | "habits" | "preview";
+type View = "editor" | "plot" | "characters" | "formatting" | "habits" | "preview" | "themes" | "master-pages" | "images";
 
 interface EditorViewProps {
   projectId: string;
@@ -77,6 +80,18 @@ export default function EditorView({ projectId, onBack }: EditorViewProps) {
     return <DevicePreviewer projectId={projectId} onClose={() => setView("editor")} />;
   }
 
+  if (view === "themes") {
+    return <ThemeBuilder onClose={() => setView("editor")} />;
+  }
+
+  if (view === "master-pages") {
+    return <MasterPages projectId={projectId} onClose={() => setView("editor")} />;
+  }
+
+  if (view === "images") {
+    return <ImageManager projectId={projectId} onClose={() => setView("editor")} />;
+  }
+
   return (
     <div className="h-screen flex">
       <Sidebar
@@ -92,6 +107,9 @@ export default function EditorView({ projectId, onBack }: EditorViewProps) {
         onShowFormatting={() => setView("formatting")}
         onShowHabits={() => setView("habits")}
         onShowPreview={() => setView("preview")}
+        onShowThemes={() => setView("themes")}
+        onShowMasterPages={() => setView("master-pages")}
+        onShowImages={() => setView("images")}
       />
       <Editor />
       <ExportDialog
