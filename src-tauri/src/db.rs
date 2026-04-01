@@ -71,6 +71,39 @@ pub struct DailyLog {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CustomTheme {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub settings_json: String, // JSON of FormattingSettings fields
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MasterPage {
+    pub id: String,
+    pub name: String,
+    pub page_type: String,
+    pub content: String,
+    pub settings_json: String, // JSON of styling overrides
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ProjectImage {
+    pub id: String,
+    pub project_id: String,
+    pub filename: String,
+    pub data_base64: String,
+    pub mime_type: String,
+    pub width: i32,
+    pub height: i32,
+    pub caption: String,
+    pub layout: String, // "inline", "full-page", "full-bleed"
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PlotPoint {
     pub id: String,
     pub project_id: String,
@@ -213,7 +246,39 @@ impl Database {
 
             CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_logs_date ON daily_logs(project_id, date);
             CREATE INDEX IF NOT EXISTS idx_plot_points_project ON plot_points(project_id);
-            CREATE INDEX IF NOT EXISTS idx_characters_project ON characters(project_id);"
+            CREATE INDEX IF NOT EXISTS idx_characters_project ON characters(project_id);
+
+            CREATE TABLE IF NOT EXISTS custom_themes (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                settings_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS master_pages (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                page_type TEXT NOT NULL DEFAULT 'custom',
+                content TEXT NOT NULL DEFAULT '',
+                settings_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS project_images (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                filename TEXT NOT NULL DEFAULT '',
+                data_base64 TEXT NOT NULL DEFAULT '',
+                mime_type TEXT NOT NULL DEFAULT 'image/png',
+                width INTEGER NOT NULL DEFAULT 0,
+                height INTEGER NOT NULL DEFAULT 0,
+                caption TEXT NOT NULL DEFAULT '',
+                layout TEXT NOT NULL DEFAULT 'inline',
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_project_images ON project_images(project_id);"
         )?;
         Ok(())
     }
@@ -279,6 +344,10 @@ impl Database {
         self.conn.execute("DELETE FROM formatting_settings WHERE project_id = ?1", params![id])?;
         self.conn.execute("DELETE FROM writing_goals WHERE project_id = ?1", params![id])?;
         self.conn.execute("DELETE FROM daily_logs WHERE project_id = ?1", params![id])?;
+        self.conn.execute("DELETE FROM plot_points WHERE project_id = ?1", params![id])?;
+        self.conn.execute("DELETE FROM plot_connections WHERE project_id = ?1", params![id])?;
+        self.conn.execute("DELETE FROM characters WHERE project_id = ?1", params![id])?;
+        self.conn.execute("DELETE FROM project_images WHERE project_id = ?1", params![id])?;
         self.conn.execute("DELETE FROM projects WHERE id = ?1", params![id])?;
         Ok(())
     }
@@ -773,6 +842,105 @@ impl Database {
 
     pub fn delete_character(&self, id: &str) -> Result<()> {
         self.conn.execute("DELETE FROM characters WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    // --- Custom Themes ---
+
+    pub fn create_custom_theme(&self, id: &str, name: &str, description: &str, settings_json: &str) -> Result<CustomTheme> {
+        let now = chrono::Utc::now().to_rfc3339();
+        self.conn.execute(
+            "INSERT INTO custom_themes (id, name, description, settings_json, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![id, name, description, settings_json, now],
+        )?;
+        Ok(CustomTheme { id: id.to_string(), name: name.to_string(), description: description.to_string(), settings_json: settings_json.to_string(), created_at: now })
+    }
+
+    pub fn list_custom_themes(&self) -> Result<Vec<CustomTheme>> {
+        let mut stmt = self.conn.prepare("SELECT id, name, description, settings_json, created_at FROM custom_themes ORDER BY created_at DESC")?;
+        let rows = stmt.query_map([], |row| {
+            Ok(CustomTheme { id: row.get(0)?, name: row.get(1)?, description: row.get(2)?, settings_json: row.get(3)?, created_at: row.get(4)? })
+        })?;
+        rows.collect()
+    }
+
+    pub fn update_custom_theme(&self, id: &str, name: &str, description: &str, settings_json: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE custom_themes SET name = ?1, description = ?2, settings_json = ?3 WHERE id = ?4",
+            params![name, description, settings_json, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_custom_theme(&self, id: &str) -> Result<()> {
+        self.conn.execute("DELETE FROM custom_themes WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    // --- Master Pages ---
+
+    pub fn create_master_page(&self, id: &str, name: &str, page_type: &str, content: &str, settings_json: &str) -> Result<MasterPage> {
+        let now = chrono::Utc::now().to_rfc3339();
+        self.conn.execute(
+            "INSERT INTO master_pages (id, name, page_type, content, settings_json, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![id, name, page_type, content, settings_json, now],
+        )?;
+        Ok(MasterPage { id: id.to_string(), name: name.to_string(), page_type: page_type.to_string(), content: content.to_string(), settings_json: settings_json.to_string(), created_at: now })
+    }
+
+    pub fn list_master_pages(&self) -> Result<Vec<MasterPage>> {
+        let mut stmt = self.conn.prepare("SELECT id, name, page_type, content, settings_json, created_at FROM master_pages ORDER BY name ASC")?;
+        let rows = stmt.query_map([], |row| {
+            Ok(MasterPage { id: row.get(0)?, name: row.get(1)?, page_type: row.get(2)?, content: row.get(3)?, settings_json: row.get(4)?, created_at: row.get(5)? })
+        })?;
+        rows.collect()
+    }
+
+    pub fn update_master_page(&self, id: &str, name: &str, content: &str, settings_json: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE master_pages SET name = ?1, content = ?2, settings_json = ?3 WHERE id = ?4",
+            params![name, content, settings_json, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_master_page(&self, id: &str) -> Result<()> {
+        self.conn.execute("DELETE FROM master_pages WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    // --- Project Images ---
+
+    pub fn save_project_image(&self, img: &ProjectImage) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO project_images (id, project_id, filename, data_base64, mime_type, width, height, caption, layout, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+             ON CONFLICT(id) DO UPDATE SET
+                filename = excluded.filename, data_base64 = excluded.data_base64,
+                mime_type = excluded.mime_type, width = excluded.width, height = excluded.height,
+                caption = excluded.caption, layout = excluded.layout",
+            params![img.id, img.project_id, img.filename, img.data_base64, img.mime_type, img.width, img.height, img.caption, img.layout, img.created_at],
+        )?;
+        Ok(())
+    }
+
+    pub fn list_project_images(&self, project_id: &str) -> Result<Vec<ProjectImage>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, project_id, filename, data_base64, mime_type, width, height, caption, layout, created_at
+             FROM project_images WHERE project_id = ?1 ORDER BY created_at ASC"
+        )?;
+        let rows = stmt.query_map(params![project_id], |row| {
+            Ok(ProjectImage {
+                id: row.get(0)?, project_id: row.get(1)?, filename: row.get(2)?,
+                data_base64: row.get(3)?, mime_type: row.get(4)?, width: row.get(5)?,
+                height: row.get(6)?, caption: row.get(7)?, layout: row.get(8)?, created_at: row.get(9)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn delete_project_image(&self, id: &str) -> Result<()> {
+        self.conn.execute("DELETE FROM project_images WHERE id = ?1", params![id])?;
         Ok(())
     }
 
