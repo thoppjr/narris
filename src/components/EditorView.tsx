@@ -29,18 +29,31 @@ export default function EditorView({ projectId, onBack }: EditorViewProps) {
   const [showExport, setShowExport] = useState(false);
 
   useEffect(() => {
-    loadChapters(projectId).then(async () => {
-      const currentChapters = useChapterStore.getState().chapters;
-      if (currentChapters.length === 0) {
-        await createChapter(projectId, "Chapter 1");
+    const init = async () => {
+      try {
+        await loadChapters(projectId);
+        const currentChapters = useChapterStore.getState().chapters;
+        if (currentChapters.length === 0) {
+          await createChapter(projectId, "Chapter 1");
+        }
+      } catch (err) {
+        console.error("Failed to load chapters:", err);
       }
-    });
-    loadFormatting(projectId);
+
+      try {
+        await loadFormatting(projectId);
+      } catch (err) {
+        console.error("Failed to load formatting:", err);
+      }
+    };
+
+    init();
+
     return () => {
       clear();
       clearFormatting();
     };
-  }, [projectId, loadChapters, createChapter, clear, clearFormatting, loadFormatting]);
+  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!project) return null;
 

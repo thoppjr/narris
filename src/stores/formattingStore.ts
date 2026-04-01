@@ -44,18 +44,27 @@ export const useFormattingStore = create<FormattingStore>((set, get) => ({
 
   loadSettings: async (projectId: string) => {
     set({ loading: true });
-    const settings = await cmd.getFormattingSettings(projectId);
-    if (settings) {
-      set({ settings, loading: false });
-    } else {
-      // Create default settings for this project
-      const defaults: FormattingSettings = {
-        id: generateId(),
-        project_id: projectId,
-        ...DEFAULT_SETTINGS,
-      };
-      await cmd.saveFormattingSettings(defaults);
-      set({ settings: defaults, loading: false });
+    try {
+      const settings = await cmd.getFormattingSettings(projectId);
+      if (settings) {
+        set({ settings, loading: false });
+      } else {
+        // Create default settings for this project
+        const defaults: FormattingSettings = {
+          id: generateId(),
+          project_id: projectId,
+          ...DEFAULT_SETTINGS,
+        };
+        try {
+          await cmd.saveFormattingSettings(defaults);
+        } catch (saveErr) {
+          console.error("Failed to save default formatting:", saveErr);
+        }
+        set({ settings: defaults, loading: false });
+      }
+    } catch (err) {
+      console.error("Failed to load formatting settings:", err);
+      set({ loading: false });
     }
   },
 
