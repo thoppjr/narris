@@ -36,10 +36,10 @@ export default function WritingHabits({ projectId, onClose }: WritingHabitsProps
   const totalWords = chapters.reduce((sum, ch) => sum + ch.word_count, 0);
 
   useEffect(() => {
-    loadGoal(projectId);
-    loadLogs(projectId);
+    loadGoal(projectId).catch((err) => console.error("Failed to load goal:", err));
+    loadLogs(projectId).catch((err) => console.error("Failed to load logs:", err));
     return () => clear();
-  }, [projectId, loadGoal, loadLogs, clear]);
+  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-log today's word count on load
   useEffect(() => {
@@ -47,7 +47,7 @@ export default function WritingHabits({ projectId, onClose }: WritingHabitsProps
       const today = todayStr();
       const todayLog = logs.find((l) => l.date === today);
       const wordsWritten = todayLog ? Math.max(0, totalWords - (todayLog.word_count - todayLog.words_written)) : 0;
-      logWords(projectId, today, totalWords, wordsWritten, 0);
+      logWords(projectId, today, totalWords, wordsWritten, 0).catch((err) => console.error("Failed to log words:", err));
     }
   }, [totalWords]); // eslint-disable-line react-hooks/exhaustive-deps
 
