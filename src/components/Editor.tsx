@@ -4,6 +4,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
 import Typography from "@tiptap/extension-typography";
+import Highlight from "@tiptap/extension-highlight";
 import { DOMSerializer } from "@tiptap/pm/model";
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useChapterStore } from "../stores/chapterStore";
@@ -275,6 +276,7 @@ export default function Editor() {
       Underline,
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       Typography,
+      Highlight,
       Footnote,
       TextMessage,
     ],

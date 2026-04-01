@@ -23,7 +23,7 @@
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-dialog": "^2.6.0",
     "@tauri-apps/plugin-sql": "^2.3.2",
-    "@tiptap/extension-highlight": "^3.21.0",
+    "@tiptap/extension-highlight": "^3.22.0",
     "@tiptap/extension-placeholder": "^3.21.0",
     "@tiptap/extension-text-align": "^3.21.0",
     "@tiptap/extension-typography": "^3.21.0",
