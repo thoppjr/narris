@@ -30,11 +30,16 @@ export default function EditorView({ projectId, onBack }: EditorViewProps) {
   );
   const [view, setView] = useState<View>("editor");
   const [showExport, setShowExport] = useState(false);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+    setReady(false);
+
     const init = async () => {
       try {
         await loadChapters(projectId);
+        if (cancelled) return;
         const currentChapters = useChapterStore.getState().chapters;
         if (currentChapters.length === 0) {
           await createChapter(projectId, "Chapter 1");
@@ -43,22 +48,40 @@ export default function EditorView({ projectId, onBack }: EditorViewProps) {
         console.error("Failed to load chapters:", err);
       }
 
+      if (cancelled) return;
+
       try {
         await loadFormatting(projectId);
       } catch (err) {
         console.error("Failed to load formatting:", err);
+      }
+
+      if (!cancelled) {
+        setReady(true);
       }
     };
 
     init();
 
     return () => {
+      cancelled = true;
       clear();
       clearFormatting();
     };
   }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!project) return null;
+
+  if (!ready) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-sand-50 dark:bg-stone-900">
+        <div className="text-center">
+          <div className="text-lg text-stone-600 dark:text-sand-300 mb-1">Opening project...</div>
+          <div className="text-sm text-ink-muted dark:text-sand-400">{project.title}</div>
+        </div>
+      </div>
+    );
+  }
 
   if (view === "plot") {
     return <PlotCanvas projectId={projectId} onClose={() => setView("editor")} />;
