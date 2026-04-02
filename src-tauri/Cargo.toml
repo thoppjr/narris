@@ -1,14 +1,14 @@
 [package]
-name = "narris"
+name = "narras"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "narris_lib"
+name = "narras_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [[bin]]
-name = "narris"
+name = "narras"
 path = "src/main.rs"
 
 [dependencies]

@@ -1,7 +1,7 @@
 {
-  "name": "narris",
+  "name": "narras",
   "version": "1.0.0",
-  "description": "narris is a simple get shit done authoring / story writing app",
+  "description": "narras — it's time to tell your story",
   "type": "module",
   "scripts": {
     "dev": "vite",
