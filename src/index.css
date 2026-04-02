@@ -300,3 +300,25 @@ body {
 .focus-mode .tiptap .has-focus {
   opacity: 1;
 }
+
+/* Small input fields for settings panels */
+.input-sm {
+  width: 100%;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.8125rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--color-sand-200, #d6cfc4);
+  background: white;
+  color: #44403c;
+  outline: none;
+  transition: box-shadow 0.15s;
+}
+.input-sm:focus {
+  box-shadow: 0 0 0 2px rgba(125, 150, 125, 0.3);
+  border-color: transparent;
+}
+.dark .input-sm {
+  background: #292524;
+  border-color: #44403c;
+  color: #e7e0d7;
+}

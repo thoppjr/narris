@@ -180,80 +180,166 @@ function FootnoteDialog({ isOpen, onClose, onInsert }: { isOpen: boolean; onClos
   );
 }
 
-// Dialog for inserting text messages
-function TextMessageDialog({ isOpen, onClose, onInsert }: { isOpen: boolean; onClose: () => void; onInsert: (attrs: { sender: string; text: string; side: "left" | "right"; color: string }) => void }) {
-  const [sender, setSender] = useState("");
-  const [text, setText] = useState("");
-  const [side, setSide] = useState<"left" | "right">("left");
-  const [color, setColor] = useState("#4a6249");
+// Conversation builder dialog for inserting multiple text messages
+interface ConvoMessage {
+  sender: string;
+  text: string;
+  side: "left" | "right";
+  color: string;
+}
+
+function TextMessageDialog({ isOpen, onClose, onInsertMultiple }: {
+  isOpen: boolean;
+  onClose: () => void;
+  onInsertMultiple: (messages: ConvoMessage[]) => void;
+}) {
+  const [messages, setMessages] = useState<ConvoMessage[]>([]);
+  const [leftName, setLeftName] = useState("Contact");
+  const [rightName, setRightName] = useState("Me");
+  const [leftColor, setLeftColor] = useState("#e8e0d4");
+  const [rightColor, setRightColor] = useState("#4a6249");
+  const [currentText, setCurrentText] = useState("");
+  const [currentSide, setCurrentSide] = useState<"left" | "right">("left");
+  const previewRef = useRef<HTMLDivElement>(null);
+
+  const addMessage = () => {
+    if (!currentText.trim()) return;
+    const msg: ConvoMessage = {
+      sender: currentSide === "left" ? leftName : rightName,
+      text: currentText.trim(),
+      side: currentSide,
+      color: currentSide === "left" ? leftColor : rightColor,
+    };
+    setMessages((prev) => [...prev, msg]);
+    setCurrentText("");
+    // Auto-switch side for natural back-and-forth
+    setCurrentSide((s) => s === "left" ? "right" : "left");
+    setTimeout(() => previewRef.current?.scrollTo({ top: previewRef.current.scrollHeight, behavior: "smooth" }), 50);
+  };
+
+  const removeMessage = (idx: number) => {
+    setMessages((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleInsertAll = () => {
+    if (messages.length === 0) return;
+    onInsertMultiple(messages);
+    setMessages([]);
+    setCurrentText("");
+    onClose();
+  };
+
+  const handleClose = () => {
+    setMessages([]);
+    setCurrentText("");
+    onClose();
+  };
+
   if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-      <div className="bg-white dark:bg-stone-800 rounded-xl border border-sand-200 dark:border-stone-700 shadow-lg p-5 w-96">
-        <h3 className="text-sm font-semibold text-stone-700 dark:text-sand-200 mb-3">Insert Text Message</h3>
-        <div className="space-y-3">
-          <input
-            type="text"
-            value={sender}
-            onChange={(e) => setSender(e.target.value)}
-            placeholder="Contact name..."
-            className="w-full input-field"
-            autoFocus
-          />
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Message text..."
-            rows={2}
-            className="w-full input-field"
-          />
-          <div className="flex gap-3 items-center">
-            <label className="text-xs text-ink-muted dark:text-sand-400">Side:</label>
-            <button
-              onClick={() => setSide("left")}
-              className={`px-3 py-1 rounded text-xs font-medium ${side === "left" ? "bg-sage-600 text-white" : "bg-sand-200 dark:bg-stone-700 text-stone-600 dark:text-sand-300"}`}
-            >
-              Left (received)
-            </button>
-            <button
-              onClick={() => setSide("right")}
-              className={`px-3 py-1 rounded text-xs font-medium ${side === "right" ? "bg-sage-600 text-white" : "bg-sand-200 dark:bg-stone-700 text-stone-600 dark:text-sand-300"}`}
-            >
-              Right (sent)
-            </button>
+      <div className="bg-white dark:bg-stone-800 rounded-xl border border-sand-200 dark:border-stone-700 shadow-lg w-[480px] max-h-[85vh] flex flex-col">
+        <div className="px-5 py-3 border-b border-sand-200 dark:border-stone-700">
+          <h3 className="text-sm font-semibold text-stone-700 dark:text-sand-200">Text Message Conversation</h3>
+          <p className="text-xs text-ink-muted dark:text-sand-400 mt-0.5">Build a back-and-forth conversation, then insert all messages at once.</p>
+        </div>
+
+        {/* Contact setup */}
+        <div className="px-5 py-3 border-b border-sand-200 dark:border-stone-700 flex gap-4">
+          <div className="flex-1">
+            <label className="text-[10px] font-medium text-ink-muted dark:text-sand-400 uppercase tracking-wider">Left (received)</label>
+            <div className="flex gap-1.5 mt-1 items-center">
+              <input type="text" value={leftName} onChange={(e) => setLeftName(e.target.value)} className="flex-1 px-2 py-1 text-xs rounded bg-sand-50 dark:bg-stone-700 border border-sand-200 dark:border-stone-600 text-stone-700 dark:text-sand-200 focus:outline-none focus:ring-1 focus:ring-sage-300" />
+              <input type="color" value={leftColor} onChange={(e) => setLeftColor(e.target.value)} className="w-6 h-6 rounded cursor-pointer border-0" />
+            </div>
           </div>
-          <div className="flex gap-3 items-center">
-            <label className="text-xs text-ink-muted dark:text-sand-400">Bubble color:</label>
-            <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="w-8 h-8 rounded cursor-pointer" />
-          </div>
-          {/* Preview */}
-          <div className="bg-sand-50 dark:bg-stone-700 rounded-lg p-3">
-            <div style={{ display: "flex", flexDirection: "column", alignItems: side === "right" ? "flex-end" : "flex-start" }}>
-              <div style={{ fontSize: 11, color: "#888", marginBottom: 2, padding: "0 12px" }}>{sender || "Contact"}</div>
-              <div style={{
-                background: side === "right" ? color : "#e8e0d4",
-                color: side === "right" ? "#fff" : "#333",
-                padding: "8px 14px",
-                borderRadius: 18,
-                maxWidth: "75%",
-                fontSize: 14,
-                lineHeight: 1.4,
-                ...(side === "right" ? { borderBottomRightRadius: 4 } : { borderBottomLeftRadius: 4 }),
-              }}>
-                {text || "Message preview..."}
-              </div>
+          <div className="flex-1">
+            <label className="text-[10px] font-medium text-ink-muted dark:text-sand-400 uppercase tracking-wider">Right (sent)</label>
+            <div className="flex gap-1.5 mt-1 items-center">
+              <input type="text" value={rightName} onChange={(e) => setRightName(e.target.value)} className="flex-1 px-2 py-1 text-xs rounded bg-sand-50 dark:bg-stone-700 border border-sand-200 dark:border-stone-600 text-stone-700 dark:text-sand-200 focus:outline-none focus:ring-1 focus:ring-sage-300" />
+              <input type="color" value={rightColor} onChange={(e) => setRightColor(e.target.value)} className="w-6 h-6 rounded cursor-pointer border-0" />
             </div>
           </div>
         </div>
-        <div className="flex gap-2 justify-end mt-4">
-          <button onClick={onClose} className="px-3 py-1.5 rounded-lg bg-sand-200 dark:bg-stone-700 text-stone-600 dark:text-sand-300 text-sm hover:bg-sand-300 transition-colors">
+
+        {/* Conversation preview */}
+        <div ref={previewRef} className="flex-1 overflow-y-auto px-5 py-3 min-h-[200px] max-h-[300px] bg-sand-50 dark:bg-stone-900 space-y-1">
+          {messages.length === 0 && (
+            <div className="text-center text-xs text-ink-muted dark:text-sand-400 py-8">
+              Add messages below to build your conversation
+            </div>
+          )}
+          {messages.map((msg, idx) => (
+            <div key={idx} className="group" style={{ display: "flex", flexDirection: "column", alignItems: msg.side === "right" ? "flex-end" : "flex-start" }}>
+              <div style={{ fontSize: 10, color: "#888", marginBottom: 1, padding: "0 12px" }}>{msg.sender}</div>
+              <div className="relative">
+                <div style={{
+                  background: msg.side === "right" ? msg.color : msg.color,
+                  color: msg.side === "right" ? "#fff" : "#333",
+                  padding: "6px 12px",
+                  borderRadius: 16,
+                  maxWidth: "85%",
+                  fontSize: 13,
+                  lineHeight: 1.4,
+                  ...(msg.side === "right" ? { borderBottomRightRadius: 4 } : { borderBottomLeftRadius: 4 }),
+                }}>
+                  {msg.text}
+                </div>
+                <button
+                  onClick={() => removeMessage(idx)}
+                  className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] leading-none flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  x
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Compose */}
+        <div className="px-5 py-3 border-t border-sand-200 dark:border-stone-700">
+          <div className="flex gap-2 mb-2">
+            <button
+              onClick={() => setCurrentSide("left")}
+              className={`px-3 py-1 rounded text-xs font-medium ${currentSide === "left" ? "bg-sage-600 text-white" : "bg-sand-200 dark:bg-stone-700 text-stone-600 dark:text-sand-300"}`}
+            >
+              {leftName}
+            </button>
+            <button
+              onClick={() => setCurrentSide("right")}
+              className={`px-3 py-1 rounded text-xs font-medium ${currentSide === "right" ? "bg-sage-600 text-white" : "bg-sand-200 dark:bg-stone-700 text-stone-600 dark:text-sand-300"}`}
+            >
+              {rightName}
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={currentText}
+              onChange={(e) => setCurrentText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") addMessage(); }}
+              placeholder="Type a message..."
+              className="flex-1 px-3 py-2 text-sm rounded-lg bg-sand-50 dark:bg-stone-700 border border-sand-200 dark:border-stone-600 text-stone-700 dark:text-sand-200 focus:outline-none focus:ring-2 focus:ring-sage-300"
+              autoFocus
+            />
+            <button onClick={addMessage} className="px-3 py-2 rounded-lg bg-sage-600 text-white text-sm font-medium hover:bg-sage-700 transition-colors">
+              Add
+            </button>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-2 justify-end px-5 py-3 border-t border-sand-200 dark:border-stone-700">
+          <button onClick={handleClose} className="px-3 py-1.5 rounded-lg bg-sand-200 dark:bg-stone-700 text-stone-600 dark:text-sand-300 text-sm hover:bg-sand-300 transition-colors">
             Cancel
           </button>
           <button
-            onClick={() => { if (text.trim()) { onInsert({ sender: sender || "Contact", text: text.trim(), side, color }); setText(""); onClose(); } }}
-            className="px-3 py-1.5 rounded-lg bg-sage-600 text-white text-sm font-medium hover:bg-sage-700 transition-colors"
+            onClick={handleInsertAll}
+            disabled={messages.length === 0}
+            className="px-4 py-1.5 rounded-lg bg-sage-600 text-white text-sm font-medium hover:bg-sage-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Insert
+            Insert {messages.length > 0 ? `${messages.length} Messages` : ""}
           </button>
         </div>
       </div>
@@ -471,7 +557,11 @@ export default function Editor() {
       <TextMessageDialog
         isOpen={showTextMessageDialog}
         onClose={() => setShowTextMessageDialog(false)}
-        onInsert={(attrs) => editor?.commands.insertTextMessage(attrs)}
+        onInsertMultiple={(messages) => {
+          messages.forEach((msg) => {
+            editor?.commands.insertTextMessage(msg);
+          });
+        }}
       />
 
       {/* Editor area */}

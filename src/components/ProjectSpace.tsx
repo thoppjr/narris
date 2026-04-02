@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useProjectStore } from "../stores/projectStore";
+import { open } from "@tauri-apps/plugin-dialog";
+import { importDocx, createSection } from "../lib/commands";
 
 interface ProjectSpaceProps {
   onOpenProject: (id: string) => void;
@@ -25,6 +27,33 @@ export default function ProjectSpace({ onOpenProject }: ProjectSpaceProps) {
   const handleDelete = async (id: string) => {
     await deleteProject(id);
     setConfirmDeleteId(null);
+  };
+
+  const handleImportDocx = async () => {
+    try {
+      const path = await open({
+        filters: [{ name: "Word Document", extensions: ["docx"] }],
+        multiple: false,
+      });
+      if (!path) return;
+      const chapters = await importDocx(path as string);
+      if (chapters.length === 0) return;
+      // Create a new project from the filename
+      const filename = (path as string).split("/").pop()?.replace(".docx", "") || "Imported";
+      const project = await createProject(filename);
+      // Create chapters from imported content
+      for (let i = 0; i < chapters.length; i++) {
+        if (i === 0) {
+          // First chapter already created by createProject flow - but we need to add content via createSection
+          await createSection(project.id, chapters[i].title, chapters[i].content, i, "chapter", null);
+        } else {
+          await createSection(project.id, chapters[i].title, chapters[i].content, i, "chapter", null);
+        }
+      }
+      onOpenProject(project.id);
+    } catch (err) {
+      console.error("DOCX import failed:", err);
+    }
   };
 
   return (
@@ -61,6 +90,15 @@ export default function ProjectSpace({ onOpenProject }: ProjectSpaceProps) {
                        transition-colors duration-150"
           >
             Create
+          </button>
+          <button
+            onClick={handleImportDocx}
+            className="px-6 py-3 rounded-lg bg-sand-200 text-stone-700 font-medium
+                       hover:bg-sand-300 active:bg-sand-400
+                       transition-colors duration-150"
+            title="Import from .docx file"
+          >
+            Import
           </button>
         </div>
       </div>
