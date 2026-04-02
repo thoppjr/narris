@@ -127,6 +127,11 @@ blockquote {{ border-left: 3px solid #ccc; padding-left: 1em; font-style: italic
 {scene_break_css}
 {drop_cap_css}
 {lead_in_css}
+/* Footnotes */
+.footnotes {{ border-top: 1px solid #ccc; margin-top: 3em; padding-top: 1em; }}
+.footnotes ol {{ padding-left: 1.5em; }}
+.footnotes li {{ font-size: 0.85em; color: #555; margin-bottom: 0.5em; text-indent: 0; }}
+sup.fn-ref {{ font-size: 0.75em; color: #4a6249; }}
 "#,
         )
         .as_bytes(),
@@ -175,6 +180,7 @@ blockquote {{ border-left: 3px solid #ccc; padding-left: 1em; font-style: italic
 
         let heading_tag = if section.chapter_type == "part" { "h1" } else { "h2" };
 
+        let processed_content = process_footnotes(&section.content);
         zip.write_all(
             format!(
                 r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -187,7 +193,7 @@ blockquote {{ border-left: 3px solid #ccc; padding-left: 1em; font-style: italic
 </body>
 </html>"#,
                 title = escape_xml(&section.title),
-                content = &section.content,
+                content = &processed_content,
                 body_class = body_class,
                 heading_tag = heading_tag,
             )
@@ -311,6 +317,62 @@ blockquote {{ border-left: 3px solid #ccc; padding-left: 1em; font-style: italic
 
     zip.finish()?;
     Ok(())
+}
+
+/// Extract footnotes from TipTap HTML and convert to endnotes at chapter bottom.
+/// TipTap footnotes look like: <span data-footnote="" data-text="..." data-number="N"><sup>N</sup></span>
+fn process_footnotes(content: &str) -> String {
+    let mut result = content.to_string();
+    let mut footnotes: Vec<(String, String)> = Vec::new(); // (number, text)
+    let mut search_pos = 0;
+
+    // Find all footnote spans
+    while let Some(start) = result[search_pos..].find("<span data-footnote") {
+        let abs_start = search_pos + start;
+        if let Some(end) = result[abs_start..].find("</span>") {
+            let abs_end = abs_start + end + 7;
+            let span = &result[abs_start..abs_end];
+
+            // Extract data-text and data-number
+            let text = extract_attr(span, "data-text").or_else(|| extract_attr(span, "title")).unwrap_or_default();
+            let num = extract_attr(span, "data-number").unwrap_or_else(|| (footnotes.len() + 1).to_string());
+
+            footnotes.push((num.clone(), text));
+
+            // Replace the span with a superscript reference
+            let replacement = format!(r#"<sup class="fn-ref">{}</sup>"#, escape_xml(&num));
+            result = format!("{}{}{}", &result[..abs_start], replacement, &result[abs_end..]);
+            search_pos = abs_start + replacement.len();
+        } else {
+            search_pos = abs_start + 1;
+        }
+    }
+
+    // Append footnotes section if any found
+    if !footnotes.is_empty() {
+        result.push_str(r#"<div class="footnotes"><ol>"#);
+        for (num, text) in &footnotes {
+            result.push_str(&format!(
+                r#"<li value="{}">{}</li>"#,
+                escape_xml(num),
+                escape_xml(text)
+            ));
+        }
+        result.push_str("</ol></div>");
+    }
+
+    result
+}
+
+fn extract_attr(html: &str, attr: &str) -> Option<String> {
+    let search = format!("{}=\"", attr);
+    if let Some(idx) = html.find(&search) {
+        let start = idx + search.len();
+        if let Some(end) = html[start..].find('"') {
+            return Some(html[start..start + end].to_string());
+        }
+    }
+    None
 }
 
 fn is_front_matter(chapter_type: &str) -> bool {

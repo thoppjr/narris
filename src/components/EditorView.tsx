@@ -10,11 +10,13 @@ import DevicePreviewer from "./DevicePreviewer";
 import ThemeBuilder from "./ThemeBuilder";
 import MasterPages from "./MasterPages";
 import ImageManager from "./ImageManager";
+import ProjectSettings from "./ProjectSettings";
+import SnapshotPanel from "./SnapshotPanel";
 import { useChapterStore } from "../stores/chapterStore";
 import { useProjectStore } from "../stores/projectStore";
 import { useFormattingStore } from "../stores/formattingStore";
 
-type View = "editor" | "plot" | "characters" | "formatting" | "habits" | "preview" | "themes" | "master-pages" | "images";
+type View = "editor" | "plot" | "characters" | "formatting" | "habits" | "preview" | "themes" | "master-pages" | "images" | "settings";
 
 interface EditorViewProps {
   projectId: string;
@@ -30,6 +32,7 @@ export default function EditorView({ projectId, onBack }: EditorViewProps) {
   );
   const [view, setView] = useState<View>("editor");
   const [showExport, setShowExport] = useState(false);
+  const [showSnapshots, setShowSnapshots] = useState(false);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -115,6 +118,10 @@ export default function EditorView({ projectId, onBack }: EditorViewProps) {
     return <ImageManager projectId={projectId} onClose={() => setView("editor")} />;
   }
 
+  if (view === "settings") {
+    return <ProjectSettings projectId={projectId} onClose={() => setView("editor")} />;
+  }
+
   return (
     <div className="h-screen flex">
       <Sidebar
@@ -133,6 +140,8 @@ export default function EditorView({ projectId, onBack }: EditorViewProps) {
         onShowThemes={() => setView("themes")}
         onShowMasterPages={() => setView("master-pages")}
         onShowImages={() => setView("images")}
+        onShowSettings={() => setView("settings")}
+        onShowSnapshots={() => setShowSnapshots(true)}
       />
       <Editor />
       <ExportDialog
@@ -140,6 +149,12 @@ export default function EditorView({ projectId, onBack }: EditorViewProps) {
         projectTitle={project.title}
         isOpen={showExport}
         onClose={() => setShowExport(false)}
+      />
+      <SnapshotPanel
+        chapterId={useChapterStore.getState().activeChapterId || ""}
+        projectId={projectId}
+        isOpen={showSnapshots}
+        onClose={() => setShowSnapshots(false)}
       />
     </div>
   );

@@ -69,6 +69,7 @@ pub fn generate_print_html(
 
     // Front matter
     for section in &front_matter {
+        let content = process_footnotes(&section.content);
         chapter_html.push_str(&format!(
             r#"<div class="front-matter">
 <h1 class="front-title">{}</h1>
@@ -77,7 +78,7 @@ pub fn generate_print_html(
 <div class="page-break"></div>
 "#,
             escape_html(&section.title),
-            &section.content,
+            &content,
         ));
     }
 
@@ -87,6 +88,7 @@ pub fn generate_print_html(
             chapter_html.push_str(r#"<div class="page-break"></div>"#);
         }
 
+        let content = process_footnotes(&section.content);
         if section.chapter_type == "part" {
             chapter_html.push_str(&format!(
                 r#"<div class="part-page">
@@ -94,7 +96,7 @@ pub fn generate_print_html(
 {}
 </div>"#,
                 escape_html(&section.title),
-                &section.content,
+                &content,
             ));
         } else {
             chapter_html.push_str(&format!(
@@ -103,13 +105,14 @@ pub fn generate_print_html(
 <div class="chapter-body">{}</div>
 </div>"#,
                 escape_html(&section.title),
-                &section.content,
+                &content,
             ));
         }
     }
 
     // Back matter
     for section in &back_matter {
+        let content = process_footnotes(&section.content);
         chapter_html.push_str(&format!(
             r#"<div class="page-break"></div>
 <div class="back-matter">
@@ -117,7 +120,7 @@ pub fn generate_print_html(
 {}
 </div>"#,
             escape_html(&section.title),
-            &section.content,
+            &content,
         ));
     }
 
@@ -317,6 +320,57 @@ h2, h3 {{ font-family: "{heading_font}", sans-serif; }}
 
     std::fs::write(output_path, html)?;
     Ok(())
+}
+
+/// Process TipTap footnote spans into numbered references + endnotes section.
+fn process_footnotes(content: &str) -> String {
+    let mut result = content.to_string();
+    let mut footnotes: Vec<(String, String)> = Vec::new();
+    let mut search_pos = 0;
+
+    while let Some(start) = result[search_pos..].find("<span data-footnote") {
+        let abs_start = search_pos + start;
+        if let Some(end) = result[abs_start..].find("</span>") {
+            let abs_end = abs_start + end + 7;
+            let span = &result[abs_start..abs_end];
+
+            let text = extract_attr(span, "data-text").or_else(|| extract_attr(span, "title")).unwrap_or_default();
+            let num = extract_attr(span, "data-number").unwrap_or_else(|| (footnotes.len() + 1).to_string());
+
+            footnotes.push((num.clone(), text));
+
+            let replacement = format!(r#"<sup style="font-size:0.75em;color:#4a6249">{}</sup>"#, escape_html(&num));
+            result = format!("{}{}{}", &result[..abs_start], replacement, &result[abs_end..]);
+            search_pos = abs_start + replacement.len();
+        } else {
+            search_pos = abs_start + 1;
+        }
+    }
+
+    if !footnotes.is_empty() {
+        result.push_str(r#"<div style="border-top:1px solid #ccc;margin-top:2em;padding-top:0.8em"><ol style="padding-left:1.5em">"#);
+        for (num, text) in &footnotes {
+            result.push_str(&format!(
+                r#"<li value="{}" style="font-size:0.85em;color:#555;margin-bottom:0.4em;text-indent:0">{}</li>"#,
+                escape_html(num),
+                escape_html(text)
+            ));
+        }
+        result.push_str("</ol></div>");
+    }
+
+    result
+}
+
+fn extract_attr(html: &str, attr: &str) -> Option<String> {
+    let search = format!("{}=\"", attr);
+    if let Some(idx) = html.find(&search) {
+        let start = idx + search.len();
+        if let Some(end) = html[start..].find('"') {
+            return Some(html[start..start + end].to_string());
+        }
+    }
+    None
 }
 
 fn is_front_matter(chapter_type: &str) -> bool {

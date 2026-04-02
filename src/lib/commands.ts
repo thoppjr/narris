@@ -5,8 +5,28 @@ export interface Project {
   title: string;
   author: string;
   genre: string;
+  isbn: string;
+  copyright_year: string;
+  publisher: string;
+  bleed_enabled: boolean;
+  bleed_size_in: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface ChapterSnapshot {
+  id: string;
+  chapter_id: string;
+  project_id: string;
+  name: string;
+  content: string;
+  word_count: number;
+  created_at: string;
+}
+
+export interface ImportedDocxChapter {
+  title: string;
+  content: string;
 }
 
 export interface Chapter {
@@ -378,6 +398,32 @@ export function deleteProjectImage(id: string): Promise<void> {
   return invoke("delete_project_image", { id });
 }
 
+// --- Snapshots ---
+
+export function createSnapshot(chapterId: string, projectId: string, name: string, content: string, wordCount: number): Promise<ChapterSnapshot> {
+  return invoke("create_snapshot", { chapterId, projectId, name, content, wordCount });
+}
+
+export function listSnapshots(chapterId: string): Promise<ChapterSnapshot[]> {
+  return invoke("list_snapshots", { chapterId });
+}
+
+export function deleteSnapshot(id: string): Promise<void> {
+  return invoke("delete_snapshot", { id });
+}
+
+// --- Project Metadata ---
+
+export function updateProjectMetadata(id: string, isbn: string, copyrightYear: string, publisher: string, bleedEnabled: boolean, bleedSizeIn: number): Promise<void> {
+  return invoke("update_project_metadata", { id, isbn, copyrightYear, publisher, bleedEnabled, bleedSizeIn });
+}
+
+// --- DOCX Import ---
+
+export function importDocx(inputPath: string): Promise<ImportedDocxChapter[]> {
+  return invoke("import_docx", { inputPath });
+}
+
 // --- Templates ---
 
 export interface BookTemplate {
@@ -507,6 +553,186 @@ export const BOOK_TEMPLATES: BookTemplate[] = [
     leadInWords: 0,
     sceneBreakStyle: "blank",
     justifyText: false,
+  },
+  {
+    name: "mystery",
+    label: "Mystery / Crime",
+    description: "Taut and atmospheric with clean serif type",
+    bodyFont: "Garamond",
+    headingFont: "Helvetica",
+    bodySizePt: 11,
+    headingSizePt: 16,
+    lineHeight: 1.55,
+    paragraphSpacingEm: 0,
+    paragraphIndentEm: 1.5,
+    dropCapEnabled: false,
+    dropCapLines: 3,
+    leadInStyle: "bold",
+    leadInWords: 2,
+    sceneBreakStyle: "asterisks",
+    justifyText: true,
+  },
+  {
+    name: "horror",
+    label: "Horror / Dark Fiction",
+    description: "Dense and moody with tight spacing",
+    bodyFont: "Palatino",
+    headingFont: "Palatino",
+    bodySizePt: 11,
+    headingSizePt: 18,
+    lineHeight: 1.5,
+    paragraphSpacingEm: 0,
+    paragraphIndentEm: 1.5,
+    dropCapEnabled: true,
+    dropCapLines: 3,
+    leadInStyle: "small-caps",
+    leadInWords: 3,
+    sceneBreakStyle: "asterisks",
+    justifyText: true,
+  },
+  {
+    name: "historical",
+    label: "Historical Fiction",
+    description: "Classic, period-appropriate feel with elegant serifs",
+    bodyFont: "Baskerville",
+    headingFont: "Baskerville",
+    bodySizePt: 11,
+    headingSizePt: 18,
+    lineHeight: 1.65,
+    paragraphSpacingEm: 0,
+    paragraphIndentEm: 2,
+    dropCapEnabled: true,
+    dropCapLines: 4,
+    leadInStyle: "small-caps",
+    leadInWords: 4,
+    sceneBreakStyle: "flourish",
+    justifyText: true,
+  },
+  {
+    name: "ya",
+    label: "Young Adult",
+    description: "Modern and inviting with slightly larger text",
+    bodyFont: "Georgia",
+    headingFont: "Helvetica",
+    bodySizePt: 12,
+    headingSizePt: 18,
+    lineHeight: 1.7,
+    paragraphSpacingEm: 0,
+    paragraphIndentEm: 1.5,
+    dropCapEnabled: false,
+    dropCapLines: 3,
+    leadInStyle: "none",
+    leadInWords: 0,
+    sceneBreakStyle: "flourish",
+    justifyText: true,
+  },
+  {
+    name: "memoir",
+    label: "Memoir / Autobiography",
+    description: "Warm and personal with generous leading",
+    bodyFont: "Georgia",
+    headingFont: "Georgia",
+    bodySizePt: 11.5,
+    headingSizePt: 18,
+    lineHeight: 1.7,
+    paragraphSpacingEm: 0,
+    paragraphIndentEm: 1.5,
+    dropCapEnabled: true,
+    dropCapLines: 3,
+    leadInStyle: "italic",
+    leadInWords: 3,
+    sceneBreakStyle: "blank",
+    justifyText: true,
+  },
+  {
+    name: "selfhelp",
+    label: "Self-Help / Business",
+    description: "Clean modern layout with block paragraphs and clear headings",
+    bodyFont: "Helvetica",
+    headingFont: "Helvetica",
+    bodySizePt: 11,
+    headingSizePt: 16,
+    lineHeight: 1.6,
+    paragraphSpacingEm: 0.5,
+    paragraphIndentEm: 0,
+    dropCapEnabled: false,
+    dropCapLines: 3,
+    leadInStyle: "bold",
+    leadInWords: 0,
+    sceneBreakStyle: "line",
+    justifyText: false,
+  },
+  {
+    name: "childrens",
+    label: "Children's Chapter Book",
+    description: "Large friendly text with wide margins",
+    bodyFont: "Georgia",
+    headingFont: "Helvetica",
+    bodySizePt: 14,
+    headingSizePt: 20,
+    lineHeight: 1.8,
+    paragraphSpacingEm: 0.5,
+    paragraphIndentEm: 1,
+    dropCapEnabled: false,
+    dropCapLines: 3,
+    leadInStyle: "none",
+    leadInWords: 0,
+    sceneBreakStyle: "flourish",
+    justifyText: false,
+  },
+  {
+    name: "western",
+    label: "Western",
+    description: "Rugged classic feel with strong serif headings",
+    bodyFont: "Palatino",
+    headingFont: "Palatino",
+    bodySizePt: 11,
+    headingSizePt: 18,
+    lineHeight: 1.6,
+    paragraphSpacingEm: 0,
+    paragraphIndentEm: 1.5,
+    dropCapEnabled: true,
+    dropCapLines: 3,
+    leadInStyle: "bold",
+    leadInWords: 3,
+    sceneBreakStyle: "asterisks",
+    justifyText: true,
+  },
+  {
+    name: "cozy",
+    label: "Cozy Mystery",
+    description: "Warm and charming with gentle ornamentation",
+    bodyFont: "Georgia",
+    headingFont: "Georgia",
+    bodySizePt: 11.5,
+    headingSizePt: 17,
+    lineHeight: 1.65,
+    paragraphSpacingEm: 0,
+    paragraphIndentEm: 1.5,
+    dropCapEnabled: true,
+    dropCapLines: 3,
+    leadInStyle: "italic",
+    leadInWords: 3,
+    sceneBreakStyle: "flourish",
+    justifyText: true,
+  },
+  {
+    name: "scifi",
+    label: "Hard Sci-Fi",
+    description: "Modern and precise with sans-serif headings",
+    bodyFont: "Palatino",
+    headingFont: "Helvetica",
+    bodySizePt: 10.5,
+    headingSizePt: 16,
+    lineHeight: 1.5,
+    paragraphSpacingEm: 0,
+    paragraphIndentEm: 1.5,
+    dropCapEnabled: false,
+    dropCapLines: 3,
+    leadInStyle: "small-caps",
+    leadInWords: 3,
+    sceneBreakStyle: "line",
+    justifyText: true,
   },
 ];
 

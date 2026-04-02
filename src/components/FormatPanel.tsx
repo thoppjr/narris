@@ -42,6 +42,7 @@ const SCENE_BREAK_OPTIONS = [
   { value: "line", label: "Horizontal Line" },
   { value: "dots", label: "• • •" },
   { value: "blank", label: "Blank Space" },
+  { value: "custom", label: "Custom Image" },
 ];
 
 const LEAD_IN_OPTIONS = [
@@ -486,6 +487,42 @@ function OrnamentsTab({ settings, updateField }: {
               {opt.label}
             </button>
           ))}
+          {settings.scene_break_style === "custom" && (
+            <div className="mt-3 space-y-2">
+              {settings.scene_break_custom && settings.scene_break_custom.startsWith("data:image") ? (
+                <div className="flex flex-col items-center gap-2">
+                  <img src={settings.scene_break_custom} alt="Custom break" className="max-h-12 max-w-full" />
+                  <button
+                    onClick={() => updateField("scene_break_custom", "")}
+                    className="text-xs text-red-500 hover:underline"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => {
+                    const input = document.createElement("input");
+                    input.type = "file";
+                    input.accept = "image/svg+xml,image/png,image/jpeg,image/gif";
+                    input.onchange = () => {
+                      const file = input.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        updateField("scene_break_custom", reader.result as string);
+                      };
+                      reader.readAsDataURL(file);
+                    };
+                    input.click();
+                  }}
+                  className="w-full px-4 py-2 text-sm rounded-lg border-2 border-dashed border-sand-300 dark:border-stone-600 text-ink-muted hover:border-sage-400 transition-colors"
+                >
+                  Upload SVG or PNG ornament...
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

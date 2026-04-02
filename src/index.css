@@ -286,3 +286,17 @@ body {
 .font-opendyslexic .tiptap {
   font-family: 'OpenDyslexic', sans-serif !important;
 }
+
+/* Paragraph Focus Mode: dim all paragraphs except the one being edited */
+.focus-mode .tiptap > * {
+  opacity: 0.25;
+  transition: opacity 0.2s ease;
+}
+.focus-mode .tiptap > .has-focus,
+.focus-mode .tiptap > *:focus-within {
+  opacity: 1;
+}
+/* Also handle nested list items */
+.focus-mode .tiptap .has-focus {
+  opacity: 1;
+}

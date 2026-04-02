@@ -374,6 +374,50 @@ fn delete_project_image(state: State<AppState>, id: String) -> Result<(), String
     db.delete_project_image(&id).map_err(|e| e.to_string())
 }
 
+// --- Snapshot Commands ---
+
+#[tauri::command]
+fn create_snapshot(state: State<AppState>, chapter_id: String, project_id: String, name: String, content: String, word_count: i32) -> Result<db::ChapterSnapshot, String> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.create_snapshot(&id, &chapter_id, &project_id, &name, &content, word_count).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn list_snapshots(state: State<AppState>, chapter_id: String) -> Result<Vec<db::ChapterSnapshot>, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.list_snapshots(&chapter_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_snapshot(state: State<AppState>, id: String) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.delete_snapshot(&id).map_err(|e| e.to_string())
+}
+
+// --- Project Metadata ---
+
+#[tauri::command]
+fn update_project_metadata(state: State<AppState>, id: String, isbn: String, copyright_year: String, publisher: String, bleed_enabled: bool, bleed_size_in: f64) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.update_project_metadata(&id, &isbn, &copyright_year, &publisher, bleed_enabled, bleed_size_in).map_err(|e| e.to_string())
+}
+
+// --- Import DOCX ---
+
+#[tauri::command]
+fn import_docx(input_path: String) -> Result<Vec<serde_json::Value>, String> {
+    let chapters = docx::import_docx(std::path::Path::new(&input_path))
+        .map_err(|e| e.to_string())?;
+    let result: Vec<serde_json::Value> = chapters.iter().map(|ch| {
+        serde_json::json!({
+            "title": ch.title,
+            "content": ch.content,
+        })
+    }).collect();
+    Ok(result)
+}
+
 // --- Export Commands ---
 
 #[tauri::command]
@@ -634,6 +678,11 @@ pub fn run() {
             save_project_image,
             list_project_images,
             delete_project_image,
+            create_snapshot,
+            list_snapshots,
+            delete_snapshot,
+            update_project_metadata,
+            import_docx,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

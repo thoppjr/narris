@@ -299,3 +299,187 @@ fn decode_html_entities(s: &str) -> String {
         .replace("&ldquo;", "\u{201C}")
         .replace("&rdquo;", "\u{201D}")
 }
+
+/// Imported chapter from a DOCX file
+#[derive(Debug)]
+pub struct ImportedChapter {
+    pub title: String,
+    pub content: String,
+}
+
+/// Import a .docx file, splitting on Heading1/Heading2 styles into chapters.
+/// Returns a list of chapters with HTML content.
+pub fn import_docx(input_path: &Path) -> Result<Vec<ImportedChapter>, Box<dyn std::error::Error>> {
+    let file = std::fs::File::open(input_path)?;
+    let mut archive = zip::ZipArchive::new(file)?;
+
+    // Read word/document.xml
+    let mut doc_xml = String::new();
+    {
+        let mut doc_file = archive.by_name("word/document.xml")?;
+        use std::io::Read;
+        doc_file.read_to_string(&mut doc_xml)?;
+    }
+
+    // Parse the OOXML into chapters
+    let mut chapters: Vec<ImportedChapter> = Vec::new();
+    let mut current_title = String::from("Chapter 1");
+    let mut current_html = String::new();
+    let mut chapter_num = 1;
+
+    // Simple XML state machine to extract paragraphs
+    let mut pos = 0;
+    let bytes = doc_xml.as_bytes();
+    let len = bytes.len();
+
+    while pos < len {
+        // Find next <w:p> or <w:p >
+        if let Some(p_start) = find_tag_start(&doc_xml, pos, "w:p") {
+            if let Some(p_end) = find_closing_tag(&doc_xml, p_start, "w:p") {
+                let para_xml = &doc_xml[p_start..p_end];
+
+                // Check paragraph style
+                let style = extract_style(para_xml);
+                let text = extract_text_runs(para_xml);
+
+                if (style == "Heading1" || style == "Heading2" || style == "heading 1" || style == "heading 2") && !text.trim().is_empty() {
+                    // Start a new chapter - save current if it has content
+                    if !current_html.trim().is_empty() {
+                        chapters.push(ImportedChapter {
+                            title: current_title,
+                            content: current_html,
+                        });
+                    }
+                    current_title = text.trim().to_string();
+                    current_html = String::new();
+                    chapter_num += 1;
+                } else if !text.trim().is_empty() {
+                    // Check for bold/italic runs and build HTML
+                    let html_para = runs_to_html(para_xml);
+                    current_html.push_str(&format!("<p>{}</p>", html_para));
+                }
+
+                pos = p_end;
+            } else {
+                pos += 1;
+            }
+        } else {
+            break;
+        }
+    }
+
+    // Don't forget the last chapter
+    if !current_html.trim().is_empty() || chapters.is_empty() {
+        chapters.push(ImportedChapter {
+            title: current_title,
+            content: current_html,
+        });
+    }
+
+    // If we only got one chapter with no meaningful title, use a default
+    if chapters.len() == 1 && chapters[0].title == "Chapter 1" && chapter_num == 1 {
+        // Keep as-is, single chapter import
+    }
+
+    Ok(chapters)
+}
+
+fn find_tag_start(xml: &str, from: usize, tag: &str) -> Option<usize> {
+    let search1 = format!("<{}>", tag);
+    let search2 = format!("<{} ", tag);
+    let slice = &xml[from..];
+    let pos1 = slice.find(&search1);
+    let pos2 = slice.find(&search2);
+    match (pos1, pos2) {
+        (Some(a), Some(b)) => Some(from + a.min(b)),
+        (Some(a), None) => Some(from + a),
+        (None, Some(b)) => Some(from + b),
+        (None, None) => None,
+    }
+}
+
+fn find_closing_tag(xml: &str, from: usize, tag: &str) -> Option<usize> {
+    let closing = format!("</{}>", tag);
+    xml[from..].find(&closing).map(|i| from + i + closing.len())
+}
+
+fn extract_style(para_xml: &str) -> String {
+    // Look for <w:pStyle w:val="..."/>
+    if let Some(idx) = para_xml.find("w:pStyle") {
+        if let Some(val_idx) = para_xml[idx..].find("w:val=\"") {
+            let start = idx + val_idx + 7;
+            if let Some(end) = para_xml[start..].find('"') {
+                return para_xml[start..start + end].to_string();
+            }
+        }
+    }
+    String::new()
+}
+
+fn extract_text_runs(para_xml: &str) -> String {
+    let mut text = String::new();
+    let mut pos = 0;
+    let t_open = "<w:t";
+    let t_close = "</w:t>";
+
+    while pos < para_xml.len() {
+        if let Some(start) = para_xml[pos..].find(t_open) {
+            let abs_start = pos + start;
+            // Find the > after <w:t or <w:t ...>
+            if let Some(gt) = para_xml[abs_start..].find('>') {
+                let text_start = abs_start + gt + 1;
+                if let Some(end) = para_xml[text_start..].find(t_close) {
+                    text.push_str(&para_xml[text_start..text_start + end]);
+                    pos = text_start + end + t_close.len();
+                } else {
+                    pos = text_start;
+                }
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+    text
+}
+
+fn runs_to_html(para_xml: &str) -> String {
+    let mut html = String::new();
+    let mut pos = 0;
+    let r_open1 = "<w:r>";
+    let r_open2 = "<w:r ";
+    let r_close = "</w:r>";
+
+    while pos < para_xml.len() {
+        // Find next <w:r> or <w:r ...>
+        let found1 = para_xml[pos..].find(r_open1).map(|i| pos + i);
+        let found2 = para_xml[pos..].find(r_open2).map(|i| pos + i);
+        let run_start = match (found1, found2) {
+            (Some(a), Some(b)) => a.min(b),
+            (Some(a), None) => a,
+            (None, Some(b)) => b,
+            (None, None) => break,
+        };
+
+        if let Some(end_offset) = para_xml[run_start..].find(r_close) {
+            let run_xml = &para_xml[run_start..run_start + end_offset + r_close.len()];
+            let text = extract_text_runs(run_xml);
+            if !text.is_empty() {
+                let bold = run_xml.contains("<w:b/>") || run_xml.contains("<w:b ");
+                let italic = run_xml.contains("<w:i/>") || run_xml.contains("<w:i ");
+                let underline = run_xml.contains("<w:u ");
+
+                let mut result = text;
+                if bold { result = format!("<strong>{}</strong>", result); }
+                if italic { result = format!("<em>{}</em>", result); }
+                if underline { result = format!("<u>{}</u>", result); }
+                html.push_str(&result);
+            }
+            pos = run_start + end_offset + r_close.len();
+        } else {
+            break;
+        }
+    }
+    html
+}

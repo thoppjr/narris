@@ -77,6 +77,31 @@ export default function CharacterSheets({ projectId, onClose }: CharacterSheetsP
     saveChar(activeChar.id, activeChar.name, updated);
   };
 
+  const handleAvatarUpload = () => {
+    if (!activeChar) return;
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const updated = { ...activeFields, __avatar: reader.result as string };
+        saveChar(activeChar.id, activeChar.name, updated);
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  };
+
+  const handleRemoveAvatar = () => {
+    if (!activeChar) return;
+    const updated = { ...activeFields };
+    delete updated.__avatar;
+    saveChar(activeChar.id, activeChar.name, updated);
+  };
+
   return (
     <div className="h-screen flex flex-col bg-sand-50 dark:bg-stone-900">
       {/* Header */}
@@ -115,9 +140,16 @@ export default function CharacterSheets({ projectId, onClose }: CharacterSheetsP
                 }`}
             >
               <div className="flex items-center gap-2 min-w-0">
-                <div className="w-8 h-8 rounded-full bg-clay-300 dark:bg-clay-700 flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
-                  {char.name.charAt(0).toUpperCase()}
-                </div>
+                {(() => {
+                  const fields: CharacterFields = JSON.parse(char.fields);
+                  return fields.__avatar ? (
+                    <img src={fields.__avatar} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-clay-300 dark:bg-clay-700 flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
+                      {char.name.charAt(0).toUpperCase()}
+                    </div>
+                  );
+                })()}
                 <span className="text-sm font-medium text-stone-700 dark:text-sand-200 truncate">
                   {char.name || "Unnamed"}
                 </span>
@@ -143,19 +175,38 @@ export default function CharacterSheets({ projectId, onClose }: CharacterSheetsP
         <div className="flex-1 overflow-y-auto p-6">
           {activeChar ? (
             <div className="max-w-2xl">
-              {/* Name */}
-              <input
-                type="text"
-                value={activeChar.name}
-                onChange={(e) => handleNameChange(e.target.value)}
-                placeholder="Character name..."
-                className="w-full text-2xl font-light text-stone-800 dark:text-sand-100 bg-transparent border-none outline-none mb-6
-                           placeholder-ink-muted"
-              />
+              {/* Avatar + Name */}
+              <div className="flex items-start gap-4 mb-6">
+                <div className="flex flex-col items-center gap-1">
+                  {activeFields.__avatar ? (
+                    <img src={activeFields.__avatar} alt="" className="w-20 h-20 rounded-full object-cover border-2 border-sand-200 dark:border-stone-600" />
+                  ) : (
+                    <div className="w-20 h-20 rounded-full bg-clay-300 dark:bg-clay-700 flex items-center justify-center text-white text-2xl font-medium">
+                      {activeChar.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex gap-1">
+                    <button onClick={handleAvatarUpload} className="text-[10px] text-sage-600 dark:text-sage-400 hover:underline">
+                      {activeFields.__avatar ? "Change" : "Upload"}
+                    </button>
+                    {activeFields.__avatar && (
+                      <button onClick={handleRemoveAvatar} className="text-[10px] text-red-500 hover:underline">Remove</button>
+                    )}
+                  </div>
+                </div>
+                <input
+                  type="text"
+                  value={activeChar.name}
+                  onChange={(e) => handleNameChange(e.target.value)}
+                  placeholder="Character name..."
+                  className="flex-1 text-2xl font-light text-stone-800 dark:text-sand-100 bg-transparent border-none outline-none mt-4
+                             placeholder-ink-muted"
+                />
+              </div>
 
               {/* Fields */}
               <div className="space-y-4">
-                {Object.entries(activeFields).map(([key, value]) => (
+                {Object.entries(activeFields).filter(([key]) => key !== "__avatar").map(([key, value]) => (
                   <div key={key} className="group">
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="text-xs font-medium uppercase tracking-wider text-ink-muted dark:text-sand-400">
