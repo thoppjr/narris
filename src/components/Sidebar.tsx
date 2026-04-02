@@ -15,7 +15,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useChapterStore } from "../stores/chapterStore";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { FRONT_MATTER_TYPES, BACK_MATTER_TYPES } from "../lib/commands";
 
 interface SidebarProps {
@@ -32,6 +32,8 @@ interface SidebarProps {
   onShowImages: () => void;
   onShowSettings: () => void;
   onShowSnapshots: () => void;
+  onTitleChange: (title: string) => void;
+  onShowCover: () => void;
 }
 
 const SECTION_TYPE_LABELS: Record<string, string> = {
@@ -163,11 +165,21 @@ function SortableChapter({
   );
 }
 
-export default function Sidebar({ projectTitle, onBack, onShowPlot, onShowCharacters, onExport, onShowFormatting, onShowHabits, onShowPreview, onShowThemes, onShowMasterPages, onShowImages, onShowSettings, onShowSnapshots }: SidebarProps) {
+export default function Sidebar({ projectTitle, onBack, onShowPlot, onShowCharacters, onExport, onShowFormatting, onShowHabits, onShowPreview, onShowThemes, onShowMasterPages, onShowImages, onShowSettings, onShowSnapshots, onTitleChange, onShowCover }: SidebarProps) {
   const { chapters, activeChapterId, createChapter, createSection, deleteChapter, setActiveChapter, reorder } =
     useChapterStore();
   const [newTitle, setNewTitle] = useState("");
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [editTitle, setEditTitle] = useState(projectTitle);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editingTitle && titleInputRef.current) {
+      titleInputRef.current.focus();
+      titleInputRef.current.select();
+    }
+  }, [editingTitle]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -227,9 +239,39 @@ export default function Sidebar({ projectTitle, onBack, onShowPlot, onShowCharac
           </svg>
           Projects
         </button>
-        <h2 className="font-medium text-stone-800 truncate text-sm">
-          {projectTitle}
-        </h2>
+        {editingTitle ? (
+          <input
+            ref={titleInputRef}
+            type="text"
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            onBlur={() => {
+              const trimmed = editTitle.trim();
+              if (trimmed && trimmed !== projectTitle) onTitleChange(trimmed);
+              setEditingTitle(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const trimmed = editTitle.trim();
+                if (trimmed && trimmed !== projectTitle) onTitleChange(trimmed);
+                setEditingTitle(false);
+              }
+              if (e.key === "Escape") {
+                setEditTitle(projectTitle);
+                setEditingTitle(false);
+              }
+            }}
+            className="w-full font-medium text-stone-800 dark:text-sand-200 text-sm bg-white dark:bg-stone-800 border border-sage-300 dark:border-sage-600 rounded px-1.5 py-0.5 outline-none focus:ring-2 focus:ring-sage-300"
+          />
+        ) : (
+          <h2
+            className="font-medium text-stone-800 dark:text-sand-200 truncate text-sm cursor-pointer hover:text-sage-700 dark:hover:text-sage-300 transition-colors"
+            onClick={() => { setEditTitle(projectTitle); setEditingTitle(true); }}
+            title="Click to edit title"
+          >
+            {projectTitle}
+          </h2>
+        )}
         <div className="text-xs text-ink-muted mt-0.5">
           {totalWords.toLocaleString()} words
         </div>
@@ -313,6 +355,12 @@ export default function Sidebar({ projectTitle, onBack, onShowPlot, onShowCharac
             className="flex-1 px-2 py-1.5 text-xs rounded-lg bg-clay-200 dark:bg-clay-800 text-clay-700 dark:text-clay-200 hover:bg-clay-300 dark:hover:bg-clay-700 transition-colors text-center"
           >
             Export
+          </button>
+          <button
+            onClick={onShowCover}
+            className="flex-1 px-2 py-1.5 text-xs rounded-lg bg-clay-200 dark:bg-clay-800 text-clay-700 dark:text-clay-200 hover:bg-clay-300 dark:hover:bg-clay-700 transition-colors text-center"
+          >
+            Cover
           </button>
         </div>
       </div>

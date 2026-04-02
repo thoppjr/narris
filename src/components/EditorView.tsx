@@ -12,11 +12,13 @@ import MasterPages from "./MasterPages";
 import ImageManager from "./ImageManager";
 import ProjectSettings from "./ProjectSettings";
 import SnapshotPanel from "./SnapshotPanel";
+import CoverEditor from "./CoverEditor";
 import { useChapterStore } from "../stores/chapterStore";
 import { useProjectStore } from "../stores/projectStore";
 import { useFormattingStore } from "../stores/formattingStore";
+import { updateProject } from "../lib/commands";
 
-type View = "editor" | "plot" | "characters" | "formatting" | "habits" | "preview" | "themes" | "master-pages" | "images" | "settings";
+type View = "editor" | "plot" | "characters" | "formatting" | "habits" | "preview" | "themes" | "master-pages" | "images" | "settings" | "cover";
 
 interface EditorViewProps {
   projectId: string;
@@ -122,6 +124,23 @@ export default function EditorView({ projectId, onBack }: EditorViewProps) {
     return <ProjectSettings projectId={projectId} onClose={() => setView("editor")} />;
   }
 
+  if (view === "cover") {
+    const chapters = useChapterStore.getState().chapters;
+    const totalWords = chapters.reduce((sum, ch) => sum + ch.word_count, 0);
+    const pageCount = Math.max(24, Math.ceil(totalWords / 250)); // KDP minimum 24 pages
+    return (
+      <CoverEditor
+        projectId={projectId}
+        projectTitle={project.title}
+        authorName={project.author}
+        pageCount={pageCount}
+        trimWidth={5.5}
+        trimHeight={8.5}
+        onClose={() => setView("editor")}
+      />
+    );
+  }
+
   return (
     <div className="h-screen flex">
       <Sidebar
@@ -142,6 +161,11 @@ export default function EditorView({ projectId, onBack }: EditorViewProps) {
         onShowImages={() => setView("images")}
         onShowSettings={() => setView("settings")}
         onShowSnapshots={() => setShowSnapshots(true)}
+        onShowCover={() => setView("cover")}
+        onTitleChange={async (newTitle: string) => {
+          await updateProject(projectId, newTitle, project.author, project.genre);
+          useProjectStore.getState().loadProjects();
+        }}
       />
       <Editor />
       <ExportDialog
