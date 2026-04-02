@@ -59,13 +59,17 @@ export default function ProjectSpace({ onOpenProject }: ProjectSpaceProps) {
   return (
     <div className="min-h-screen bg-sand-50 flex flex-col items-center px-6 py-12">
       {/* Header */}
-      <div className="w-full max-w-3xl mb-12">
-        <h1 className="text-4xl font-light tracking-tight text-stone-800 mb-2">
-          Narris
-        </h1>
-        <p className="text-ink-muted text-lg">
-          Your writing space. Pick up where you left off, or start something
-          new.
+      <div className="w-full max-w-3xl mb-12 text-center">
+        <div className="flex items-center justify-center gap-4 mb-4">
+          <img src="/narras.svg" alt="narras" className="w-16 h-16" />
+          <h1 className="text-5xl tracking-tight text-stone-800 dark:text-sand-100"
+              style={{ fontFamily: "'Helvetica Neue', 'Inter', 'Segoe UI', system-ui, sans-serif", fontWeight: 200, letterSpacing: "0.12em" }}>
+            narras
+          </h1>
+        </div>
+        <p className="text-ink-muted dark:text-sand-400 text-base italic tracking-wide"
+           style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>
+          it's time to tell your story
         </p>
       </div>
 

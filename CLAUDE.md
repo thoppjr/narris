@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Narris is an all-in-one writing and formatting desktop app for indie authors. See `PRD.md` for the full product requirements document.
+narras is an all-in-one writing and formatting desktop app for indie authors. See `PRD.md` for the full product requirements document.
 
 **Target platforms:** Linux (Debian/Ubuntu, ChromeOS Linux), x86_64 and arm64.
 
@@ -38,7 +38,7 @@ apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-d
 ## Architecture
 
 ```
-narris/
+narras/
 ├── src/                        # React + TypeScript frontend
 │   ├── main.tsx                # Entry point
 │   ├── App.tsx                 # Root component (routes between ProjectSpace and EditorView)
@@ -66,7 +66,7 @@ Frontend components use Zustand stores, which call typed command wrappers in `li
 
 ### Database
 
-SQLite database stored at `~/.local/share/narris/narris.db` with two tables: `projects` and `chapters`. The `chapters` table has a `sort_order` column for drag-and-drop reordering and stores editor content as HTML.
+SQLite database stored at `~/.local/share/narras/narras.db` with two tables: `projects` and `chapters`. The `chapters` table has a `sort_order` column for drag-and-drop reordering and stores editor content as HTML.
 
 ## Design Principles
 

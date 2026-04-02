@@ -613,7 +613,7 @@ fn export_box_set_epub(state: State<AppState>, project_ids: Vec<String>, title: 
 pub fn run() {
     let app_dir = dirs_next::data_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("narris");
+        .join("narras");
     std::fs::create_dir_all(&app_dir).expect("Failed to create app data directory");
 
     let db_path = app_dir.join("narris.db");

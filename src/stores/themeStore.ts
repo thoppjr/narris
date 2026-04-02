@@ -11,14 +11,14 @@ export const useThemeStore = create<ThemeStore>((set) => ({
     set((state) => {
       const next = !state.dark;
       document.documentElement.classList.toggle("dark", next);
-      localStorage.setItem("narris-theme", next ? "dark" : "light");
+      localStorage.setItem("narras-theme", next ? "dark" : "light");
       return { dark: next };
     }),
 }));
 
 // Initialize on load
 if (typeof window !== "undefined") {
-  const saved = localStorage.getItem("narris-theme");
+  const saved = localStorage.getItem("narras-theme");
   const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   const isDark = saved ? saved === "dark" : prefersDark;
   if (isDark) {

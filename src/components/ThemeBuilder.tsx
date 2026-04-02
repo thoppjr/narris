@@ -76,7 +76,7 @@ export default function ThemeBuilder({ onClose }: ThemeBuilderProps) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${theme.name.replace(/\s+/g, "-").toLowerCase()}.narris-theme.json`;
+    a.download = `${theme.name.replace(/\s+/g, "-").toLowerCase()}.narras-theme.json`;
     a.click();
     URL.revokeObjectURL(url);
     setMessage("Theme exported");

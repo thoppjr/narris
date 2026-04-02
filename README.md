@@ -1,2 +1,2 @@
-# narris
-narris is a simple get shit done authoring / story writing app
+# narras
+it's time to tell your story

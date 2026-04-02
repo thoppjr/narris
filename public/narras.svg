@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Background circle - warm sand -->
+  <circle cx="256" cy="256" r="246" fill="#f5f0e8" stroke="#d6cfc4" stroke-width="4"/>
+
+  <!-- Open book shape - muted sage -->
+  <path d="M128 160 C128 140, 160 130, 256 150 C352 130, 384 140, 384 160 L384 370 C384 370, 352 355, 256 370 C160 355, 128 370, 128 370 Z"
+        fill="#e8e0d4" stroke="#7d967d" stroke-width="3" stroke-linejoin="round"/>
+
+  <!-- Center fold of book -->
+  <path d="M256 150 L256 370" stroke="#7d967d" stroke-width="2" stroke-dasharray="6 4" opacity="0.5"/>
+
+  <!-- Left page lines -->
+  <line x1="155" y1="195" x2="240" y2="188" stroke="#b8a99a" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+  <line x1="155" y1="220" x2="240" y2="213" stroke="#b8a99a" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+  <line x1="155" y1="245" x2="240" y2="238" stroke="#b8a99a" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+  <line x1="155" y1="270" x2="240" y2="263" stroke="#b8a99a" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
+  <line x1="155" y1="295" x2="240" y2="288" stroke="#b8a99a" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
+
+  <!-- Right page lines -->
+  <line x1="272" y1="188" x2="357" y2="195" stroke="#b8a99a" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+  <line x1="272" y1="213" x2="357" y2="220" stroke="#b8a99a" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+  <line x1="272" y1="238" x2="357" y2="245" stroke="#b8a99a" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+  <line x1="272" y1="263" x2="357" y2="270" stroke="#b8a99a" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
+
+  <!-- Stylized pen/quill stroke forming an 'n' arc - sage green -->
+  <path d="M190 330 C190 200, 210 170, 256 200 C302 170, 322 200, 322 330"
+        stroke="#4a6249" stroke-width="6" stroke-linecap="round" fill="none" opacity="0.85"/>
+
+  <!-- Pen nib dot -->
+  <circle cx="322" cy="330" r="5" fill="#4a6249" opacity="0.85"/>
+
+  <!-- Small decorative leaf/branch - Japandi organic element -->
+  <path d="M340 130 C350 115, 370 110, 375 120 C380 130, 365 135, 340 130 Z" fill="#7d967d" opacity="0.6"/>
+  <path d="M340 130 C335 115, 330 100, 338 95 C346 90, 345 108, 340 130 Z" fill="#7d967d" opacity="0.5"/>
+  <line x1="340" y1="130" x2="340" y2="148" stroke="#7d967d" stroke-width="1.5" opacity="0.4"/>
+</svg>
