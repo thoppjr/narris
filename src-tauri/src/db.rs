@@ -8,8 +8,24 @@ pub struct Project {
     pub title: String,
     pub author: String,
     pub genre: String,
+    pub isbn: String,
+    pub copyright_year: String,
+    pub publisher: String,
+    pub bleed_enabled: bool,
+    pub bleed_size_in: f64,
     pub created_at: String,
     pub updated_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ChapterSnapshot {
+    pub id: String,
+    pub chapter_id: String,
+    pub project_id: String,
+    pub name: String,
+    pub content: String,
+    pub word_count: i32,
+    pub created_at: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -150,9 +166,27 @@ impl Database {
                 title TEXT NOT NULL DEFAULT 'Untitled Project',
                 author TEXT NOT NULL DEFAULT '',
                 genre TEXT NOT NULL DEFAULT '',
+                isbn TEXT NOT NULL DEFAULT '',
+                copyright_year TEXT NOT NULL DEFAULT '',
+                publisher TEXT NOT NULL DEFAULT '',
+                bleed_enabled INTEGER NOT NULL DEFAULT 0,
+                bleed_size_in REAL NOT NULL DEFAULT 0.125,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS chapter_snapshots (
+                id TEXT PRIMARY KEY,
+                chapter_id TEXT NOT NULL,
+                project_id TEXT NOT NULL,
+                name TEXT NOT NULL DEFAULT '',
+                content TEXT NOT NULL DEFAULT '',
+                word_count INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE CASCADE,
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_snapshots_chapter ON chapter_snapshots(chapter_id);
 
             CREATE TABLE IF NOT EXISTS chapters (
                 id TEXT PRIMARY KEY,
@@ -285,11 +319,18 @@ impl Database {
 
     fn migrate(&self) -> Result<()> {
         // Add parent_id column if missing (for existing databases)
-        let has_parent_id: bool = self.conn
-            .prepare("SELECT parent_id FROM chapters LIMIT 0")
-            .is_ok();
-        if !has_parent_id {
+        if self.conn.prepare("SELECT parent_id FROM chapters LIMIT 0").is_err() {
             self.conn.execute_batch("ALTER TABLE chapters ADD COLUMN parent_id TEXT")?;
+        }
+        // Add project metadata columns
+        if self.conn.prepare("SELECT isbn FROM projects LIMIT 0").is_err() {
+            self.conn.execute_batch(
+                "ALTER TABLE projects ADD COLUMN isbn TEXT NOT NULL DEFAULT '';
+                 ALTER TABLE projects ADD COLUMN copyright_year TEXT NOT NULL DEFAULT '';
+                 ALTER TABLE projects ADD COLUMN publisher TEXT NOT NULL DEFAULT '';
+                 ALTER TABLE projects ADD COLUMN bleed_enabled INTEGER NOT NULL DEFAULT 0;
+                 ALTER TABLE projects ADD COLUMN bleed_size_in REAL NOT NULL DEFAULT 0.125;"
+            )?;
         }
         Ok(())
     }
@@ -299,8 +340,8 @@ impl Database {
     pub fn create_project(&self, id: &str, title: &str) -> Result<Project> {
         let now = chrono::Utc::now().to_rfc3339();
         self.conn.execute(
-            "INSERT INTO projects (id, title, author, genre, created_at, updated_at)
-             VALUES (?1, ?2, '', '', ?3, ?3)",
+            "INSERT INTO projects (id, title, author, genre, isbn, copyright_year, publisher, bleed_enabled, bleed_size_in, created_at, updated_at)
+             VALUES (?1, ?2, '', '', '', '', '', 0, 0.125, ?3, ?3)",
             params![id, title, now],
         )?;
         Ok(Project {
@@ -308,6 +349,11 @@ impl Database {
             title: title.to_string(),
             author: String::new(),
             genre: String::new(),
+            isbn: String::new(),
+            copyright_year: String::new(),
+            publisher: String::new(),
+            bleed_enabled: false,
+            bleed_size_in: 0.125,
             created_at: now.clone(),
             updated_at: now,
         })
@@ -315,7 +361,7 @@ impl Database {
 
     pub fn list_projects(&self) -> Result<Vec<Project>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, title, author, genre, created_at, updated_at FROM projects ORDER BY updated_at DESC"
+            "SELECT id, title, author, genre, isbn, copyright_year, publisher, bleed_enabled, bleed_size_in, created_at, updated_at FROM projects ORDER BY updated_at DESC"
         )?;
         let rows = stmt.query_map([], |row| {
             Ok(Project {
@@ -323,8 +369,13 @@ impl Database {
                 title: row.get(1)?,
                 author: row.get(2)?,
                 genre: row.get(3)?,
-                created_at: row.get(4)?,
-                updated_at: row.get(5)?,
+                isbn: row.get(4)?,
+                copyright_year: row.get(5)?,
+                publisher: row.get(6)?,
+                bleed_enabled: row.get::<_, i32>(7)? != 0,
+                bleed_size_in: row.get(8)?,
+                created_at: row.get(9)?,
+                updated_at: row.get(10)?,
             })
         })?;
         rows.collect()
@@ -335,6 +386,15 @@ impl Database {
         self.conn.execute(
             "UPDATE projects SET title = ?1, author = ?2, genre = ?3, updated_at = ?4 WHERE id = ?5",
             params![title, author, genre, now, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_project_metadata(&self, id: &str, isbn: &str, copyright_year: &str, publisher: &str, bleed_enabled: bool, bleed_size_in: f64) -> Result<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+        self.conn.execute(
+            "UPDATE projects SET isbn = ?1, copyright_year = ?2, publisher = ?3, bleed_enabled = ?4, bleed_size_in = ?5, updated_at = ?6 WHERE id = ?7",
+            params![isbn, copyright_year, publisher, bleed_enabled as i32, bleed_size_in, now, id],
         )?;
         Ok(())
     }
@@ -740,19 +800,58 @@ impl Database {
 
     pub fn export_project(&self, project_id: &str) -> Result<(Project, Vec<Chapter>)> {
         let project: Project = self.conn.query_row(
-            "SELECT id, title, author, genre, created_at, updated_at FROM projects WHERE id = ?1",
+            "SELECT id, title, author, genre, isbn, copyright_year, publisher, bleed_enabled, bleed_size_in, created_at, updated_at FROM projects WHERE id = ?1",
             params![project_id],
             |row| Ok(Project {
                 id: row.get(0)?,
                 title: row.get(1)?,
                 author: row.get(2)?,
                 genre: row.get(3)?,
-                created_at: row.get(4)?,
-                updated_at: row.get(5)?,
+                isbn: row.get(4)?,
+                copyright_year: row.get(5)?,
+                publisher: row.get(6)?,
+                bleed_enabled: row.get::<_, i32>(7)? != 0,
+                bleed_size_in: row.get(8)?,
+                created_at: row.get(9)?,
+                updated_at: row.get(10)?,
             }),
         )?;
         let chapters = self.list_chapters(project_id)?;
         Ok((project, chapters))
+    }
+
+    // --- Chapter Snapshots ---
+
+    pub fn create_snapshot(&self, id: &str, chapter_id: &str, project_id: &str, name: &str, content: &str, word_count: i32) -> Result<ChapterSnapshot> {
+        let now = chrono::Utc::now().to_rfc3339();
+        self.conn.execute(
+            "INSERT INTO chapter_snapshots (id, chapter_id, project_id, name, content, word_count, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![id, chapter_id, project_id, name, content, word_count, now],
+        )?;
+        Ok(ChapterSnapshot {
+            id: id.to_string(), chapter_id: chapter_id.to_string(), project_id: project_id.to_string(),
+            name: name.to_string(), content: content.to_string(), word_count, created_at: now,
+        })
+    }
+
+    pub fn list_snapshots(&self, chapter_id: &str) -> Result<Vec<ChapterSnapshot>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, chapter_id, project_id, name, content, word_count, created_at
+             FROM chapter_snapshots WHERE chapter_id = ?1 ORDER BY created_at DESC"
+        )?;
+        let rows = stmt.query_map(params![chapter_id], |row| {
+            Ok(ChapterSnapshot {
+                id: row.get(0)?, chapter_id: row.get(1)?, project_id: row.get(2)?,
+                name: row.get(3)?, content: row.get(4)?, word_count: row.get(5)?, created_at: row.get(6)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn delete_snapshot(&self, id: &str) -> Result<()> {
+        self.conn.execute("DELETE FROM chapter_snapshots WHERE id = ?1", params![id])?;
+        Ok(())
     }
 
     // --- Plot Points ---
@@ -949,8 +1048,9 @@ impl Database {
     pub fn import_project(&self, project: &Project, chapters: &[Chapter]) -> Result<()> {
         let now = chrono::Utc::now().to_rfc3339();
         self.conn.execute(
-            "INSERT INTO projects (id, title, author, genre, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![project.id, project.title, project.author, project.genre, now, now],
+            "INSERT INTO projects (id, title, author, genre, isbn, copyright_year, publisher, bleed_enabled, bleed_size_in, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)",
+            params![project.id, project.title, project.author, project.genre, project.isbn, project.copyright_year, project.publisher, project.bleed_enabled as i32, project.bleed_size_in, now],
         )?;
         for ch in chapters {
             self.conn.execute(
