@@ -1,5 +1,5 @@
 /// Generates a PDF file by first creating print-ready HTML, then converting via system Chromium.
-/// Falls back to HTML output if no PDF converter is found.
+/// Returns an error (with no file written) if no PDF converter is available.
 
 pub fn generate_pdf(
     metadata: &PdfMetadata,
@@ -7,13 +7,26 @@ pub fn generate_pdf(
     formatting: Option<&PdfFormatting>,
     output_path: &std::path::Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Generate HTML to a temp file
-    let temp_html = output_path.with_extension("_temp_print.html");
+    // Generate HTML to a temp file alongside the output path
+    let temp_html = output_path.with_file_name({
+        let stem = output_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("narras_export");
+        format!("{}_temp.html", stem)
+    });
     generate_print_html(metadata, chapters, formatting, &temp_html)?;
 
-    let temp_html_uri = format!("file://{}", temp_html.display());
+    // Ensure output does not pre-exist (stale file would fool the exists() check)
+    let _ = std::fs::remove_file(output_path);
 
-    // Try available PDF converters
+    let temp_html_uri = format!("file://{}", temp_html.display());
+    let output_str = output_path
+        .to_str()
+        .ok_or("Invalid output path")?
+        .to_string();
+
+    // Try available Chromium/Chrome installations
     let browsers = [
         "chromium-browser",
         "chromium",
@@ -29,15 +42,27 @@ pub fn generate_pdf(
                 "--headless",
                 "--disable-gpu",
                 "--no-sandbox",
+                "--no-pdf-header-footer",
                 "--disable-software-rasterizer",
                 "--run-all-compositor-stages-before-draw",
-                &format!("--print-to-pdf={}", output_path.display()),
+                "--virtual-time-budget=5000",
+                &format!("--print-to-pdf={}", output_str),
                 &temp_html_uri,
             ])
             .output();
 
-        if let Ok(output) = result {
-            if output.status.success() && output_path.exists() {
+        if let Ok(proc) = result {
+            if proc.status.success() && is_valid_pdf(output_path) {
+                pdf_generated = true;
+                break;
+            }
+            // Some Chrome versions ignore --print-to-pdf path and write to output.pdf
+            // in the working directory; try to move it if that happened
+            let cwd_pdf = std::env::current_dir()
+                .map(|d| d.join("output.pdf"))
+                .unwrap_or_default();
+            if cwd_pdf.exists() && is_valid_pdf(&cwd_pdf) {
+                std::fs::rename(&cwd_pdf, output_path)?;
                 pdf_generated = true;
                 break;
             }
@@ -48,31 +73,56 @@ pub fn generate_pdf(
     if !pdf_generated {
         let result = std::process::Command::new("wkhtmltopdf")
             .args([
-                "--page-size", "Custom",
                 "--quiet",
+                "--no-stop-slow-scripts",
                 temp_html.to_str().unwrap_or(""),
                 output_path.to_str().unwrap_or(""),
             ])
             .output();
 
-        if let Ok(output) = result {
-            if output.status.success() && output_path.exists() {
+        if let Ok(proc) = result {
+            if proc.status.success() && is_valid_pdf(output_path) {
                 pdf_generated = true;
             }
         }
     }
 
-    // Clean up temp file
+    // Clean up temp HTML file
     let _ = std::fs::remove_file(&temp_html);
 
     if !pdf_generated {
-        // Fall back: write HTML directly to output path
-        generate_print_html(metadata, chapters, formatting, output_path)?;
-        return Err("PDF conversion failed. Install chromium-browser for PDF export: sudo apt install chromium-browser. HTML file saved instead.".into());
+        // Remove any partial/corrupt output so callers don't see a bad file
+        let _ = std::fs::remove_file(output_path);
+        return Err(
+            "No PDF converter found. Run: sudo apt install chromium-browser\n\
+             Then retry the export. Alternatively install wkhtmltopdf."
+                .into(),
+        );
     }
 
     Ok(())
 }
+
+/// Returns true only if the file at `path` begins with the PDF magic bytes and is >500 bytes.
+fn is_valid_pdf(path: &std::path::Path) -> bool {
+    use std::io::Read;
+    let Ok(mut f) = std::fs::File::open(path) else {
+        return false;
+    };
+    let mut magic = [0u8; 5];
+    if f.read_exact(&mut magic).is_err() {
+        return false;
+    }
+    if &magic != b"%PDF-" {
+        return false;
+    }
+    // Confirm non-trivial size
+    let Ok(meta) = std::fs::metadata(path) else {
+        return false;
+    };
+    meta.len() > 500
+}
+
 
 /// Generates a print-ready HTML file styled for PDF printing.
 /// Users can open this in a browser and use Print > Save as PDF.
