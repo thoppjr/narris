@@ -44,17 +44,8 @@ export default function ExportDialog({ projectId, projectTitle, isOpen, onClose 
           filters: [{ name: "PDF", extensions: ["pdf"] }],
         });
         if (path) {
-          try {
-            await cmd.exportPdf(projectId, path, trimSize);
-            setResult(`Exported to ${path}`);
-          } catch (err) {
-            const errStr = String(err);
-            if (errStr.includes("chromium")) {
-              setResult(`${errStr}\nFile saved as HTML at: ${path}`);
-            } else {
-              throw err;
-            }
-          }
+          await cmd.exportPdf(projectId, path, trimSize);
+          setResult(`✓ PDF exported to ${path}`);
         }
       } else if (format === "docx") {
         const path = await save({
@@ -71,17 +62,8 @@ export default function ExportDialog({ projectId, projectTitle, isOpen, onClose 
           filters: [{ name: "PDF", extensions: ["pdf"] }],
         });
         if (path) {
-          try {
-            await cmd.exportPdfLargePrint(projectId, path, trimSize);
-            setResult(`Exported to ${path}`);
-          } catch (err) {
-            const errStr = String(err);
-            if (errStr.includes("chromium")) {
-              setResult(`${errStr}\nFile saved as HTML at: ${path}`);
-            } else {
-              throw err;
-            }
-          }
+          await cmd.exportPdfLargePrint(projectId, path, trimSize);
+          setResult(`✓ PDF exported to ${path}`);
         }
       } else if (format === "box-set") {
         if (boxSetIds.length === 0) {
@@ -99,7 +81,12 @@ export default function ExportDialog({ projectId, projectTitle, isOpen, onClose 
         }
       }
     } catch (err) {
-      setResult(`Error: ${err}`);
+      const errStr = String(err);
+      if (errStr.includes("apt install")) {
+        setResult(`PDF export requires a converter.\n\nIn your Linux terminal run:\n  sudo apt install chromium-browser\n\nThen retry the export.`);
+      } else {
+        setResult(`Error: ${errStr}`);
+      }
     } finally {
       setExporting(false);
     }
@@ -190,7 +177,7 @@ export default function ExportDialog({ projectId, projectTitle, isOpen, onClose 
               </p>
             )}
             <p className="mt-2 text-xs text-ink-muted dark:text-sand-400">
-              Exports print-ready HTML. Open in browser and use Print &gt; Save as PDF.
+              Requires <code className="font-mono">chromium-browser</code> or <code className="font-mono">wkhtmltopdf</code> installed in Linux.
             </p>
           </div>
         )}
@@ -255,7 +242,7 @@ export default function ExportDialog({ projectId, projectTitle, isOpen, onClose 
         {/* Result message */}
         {result && (
           <div className={`mb-4 px-3 py-2.5 rounded-lg text-sm whitespace-pre-wrap ${
-            result.startsWith("Error")
+            result.startsWith("Error") || result.startsWith("PDF export requires")
               ? "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300"
               : "bg-sage-50 dark:bg-sage-900/30 text-sage-700 dark:text-sage-300"
           }`}>
