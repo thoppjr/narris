@@ -414,10 +414,10 @@ fn toggle_plot_point_completed(state: State<AppState>, id: String, completed: bo
 // --- Editor Comments ---
 
 #[tauri::command]
-fn create_editor_comment(state: State<AppState>, chapter_id: String, project_id: String, content: String, author: String, color: String, position_from: i32, position_to: i32) -> Result<db::EditorComment, String> {
+fn create_editor_comment(state: State<AppState>, chapter_id: String, project_id: String, content: String, author: String, color: String, position_from: i32, position_to: i32, comment_type: String, suggested_text: String) -> Result<db::EditorComment, String> {
     let id = uuid::Uuid::new_v4().to_string();
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    db.create_editor_comment(&id, &chapter_id, &project_id, &content, &author, &color, position_from, position_to).map_err(|e| e.to_string())
+    db.create_editor_comment(&id, &chapter_id, &project_id, &content, &author, &color, position_from, position_to, &comment_type, &suggested_text).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

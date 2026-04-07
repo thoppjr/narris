@@ -130,6 +130,8 @@ pub struct EditorComment {
     pub position_from: i32,
     pub position_to: i32,
     pub resolved: bool,
+    pub comment_type: String,      // "comment" or "suggestion"
+    pub suggested_text: String,    // original text for suggestions
     pub created_at: String,
 }
 
@@ -348,6 +350,8 @@ impl Database {
                 position_from INTEGER NOT NULL DEFAULT 0,
                 position_to INTEGER NOT NULL DEFAULT 0,
                 resolved INTEGER NOT NULL DEFAULT 0,
+                comment_type TEXT NOT NULL DEFAULT 'comment',
+                suggested_text TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
                 FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE CASCADE
@@ -375,6 +379,13 @@ impl Database {
         // Add completed column to plot_points
         if self.conn.prepare("SELECT completed FROM plot_points LIMIT 0").is_err() {
             self.conn.execute_batch("ALTER TABLE plot_points ADD COLUMN completed INTEGER NOT NULL DEFAULT 0")?;
+        }
+        // Add comment_type and suggested_text to editor_comments
+        if self.conn.prepare("SELECT comment_type FROM editor_comments LIMIT 0").is_err() {
+            self.conn.execute_batch(
+                "ALTER TABLE editor_comments ADD COLUMN comment_type TEXT NOT NULL DEFAULT 'comment';
+                 ALTER TABLE editor_comments ADD COLUMN suggested_text TEXT NOT NULL DEFAULT '';"
+            )?;
         }
         // Add project metadata columns
         if self.conn.prepare("SELECT isbn FROM projects LIMIT 0").is_err() {
@@ -1109,27 +1120,27 @@ impl Database {
 
     // --- Editor Comments ---
 
-    pub fn create_editor_comment(&self, id: &str, chapter_id: &str, project_id: &str, content: &str, author: &str, color: &str, position_from: i32, position_to: i32) -> Result<EditorComment> {
+    pub fn create_editor_comment(&self, id: &str, chapter_id: &str, project_id: &str, content: &str, author: &str, color: &str, position_from: i32, position_to: i32, comment_type: &str, suggested_text: &str) -> Result<EditorComment> {
         let now = chrono::Utc::now().to_rfc3339();
         self.conn.execute(
-            "INSERT INTO editor_comments (id, chapter_id, project_id, content, author, color, position_from, position_to, resolved, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9)",
-            params![id, chapter_id, project_id, content, author, color, position_from, position_to, now],
+            "INSERT INTO editor_comments (id, chapter_id, project_id, content, author, color, position_from, position_to, resolved, comment_type, suggested_text, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9, ?10, ?11)",
+            params![id, chapter_id, project_id, content, author, color, position_from, position_to, comment_type, suggested_text, now],
         )?;
-        Ok(EditorComment { id: id.to_string(), chapter_id: chapter_id.to_string(), project_id: project_id.to_string(), content: content.to_string(), author: author.to_string(), color: color.to_string(), position_from, position_to, resolved: false, created_at: now })
+        Ok(EditorComment { id: id.to_string(), chapter_id: chapter_id.to_string(), project_id: project_id.to_string(), content: content.to_string(), author: author.to_string(), color: color.to_string(), position_from, position_to, resolved: false, comment_type: comment_type.to_string(), suggested_text: suggested_text.to_string(), created_at: now })
     }
 
     pub fn list_editor_comments(&self, chapter_id: &str) -> Result<Vec<EditorComment>> {
-        let mut stmt = self.conn.prepare("SELECT id, chapter_id, project_id, content, author, color, position_from, position_to, resolved, created_at FROM editor_comments WHERE chapter_id = ?1 ORDER BY position_from ASC")?;
+        let mut stmt = self.conn.prepare("SELECT id, chapter_id, project_id, content, author, color, position_from, position_to, resolved, comment_type, suggested_text, created_at FROM editor_comments WHERE chapter_id = ?1 ORDER BY position_from ASC")?;
         let rows = stmt.query_map(params![chapter_id], |row| {
-            Ok(EditorComment { id: row.get(0)?, chapter_id: row.get(1)?, project_id: row.get(2)?, content: row.get(3)?, author: row.get(4)?, color: row.get(5)?, position_from: row.get(6)?, position_to: row.get(7)?, resolved: row.get::<_, i32>(8)? != 0, created_at: row.get(9)? })
+            Ok(EditorComment { id: row.get(0)?, chapter_id: row.get(1)?, project_id: row.get(2)?, content: row.get(3)?, author: row.get(4)?, color: row.get(5)?, position_from: row.get(6)?, position_to: row.get(7)?, resolved: row.get::<_, i32>(8)? != 0, comment_type: row.get(9)?, suggested_text: row.get(10)?, created_at: row.get(11)? })
         })?;
         rows.collect()
     }
 
     pub fn list_project_comments(&self, project_id: &str) -> Result<Vec<EditorComment>> {
-        let mut stmt = self.conn.prepare("SELECT id, chapter_id, project_id, content, author, color, position_from, position_to, resolved, created_at FROM editor_comments WHERE project_id = ?1 ORDER BY created_at ASC")?;
+        let mut stmt = self.conn.prepare("SELECT id, chapter_id, project_id, content, author, color, position_from, position_to, resolved, comment_type, suggested_text, created_at FROM editor_comments WHERE project_id = ?1 ORDER BY created_at ASC")?;
         let rows = stmt.query_map(params![project_id], |row| {
-            Ok(EditorComment { id: row.get(0)?, chapter_id: row.get(1)?, project_id: row.get(2)?, content: row.get(3)?, author: row.get(4)?, color: row.get(5)?, position_from: row.get(6)?, position_to: row.get(7)?, resolved: row.get::<_, i32>(8)? != 0, created_at: row.get(9)? })
+            Ok(EditorComment { id: row.get(0)?, chapter_id: row.get(1)?, project_id: row.get(2)?, content: row.get(3)?, author: row.get(4)?, color: row.get(5)?, position_from: row.get(6)?, position_to: row.get(7)?, resolved: row.get::<_, i32>(8)? != 0, comment_type: row.get(9)?, suggested_text: row.get(10)?, created_at: row.get(11)? })
         })?;
         rows.collect()
     }
@@ -1309,8 +1320,8 @@ impl Database {
                 if !new_ch_id.is_empty() {
                     let now_c = chrono::Utc::now().to_rfc3339();
                     self.conn.execute(
-                        "INSERT INTO editor_comments (id, chapter_id, project_id, content, author, color, position_from, position_to, resolved, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-                        params![new_id, new_ch_id, new_project_id, c["content"].as_str().unwrap_or(""), c["author"].as_str().unwrap_or("Author"), c["color"].as_str().unwrap_or("#f59e0b"), c["position_from"].as_i64().unwrap_or(0), c["position_to"].as_i64().unwrap_or(0), c["resolved"].as_bool().unwrap_or(false) as i32, now_c],
+                        "INSERT INTO editor_comments (id, chapter_id, project_id, content, author, color, position_from, position_to, resolved, comment_type, suggested_text, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                        params![new_id, new_ch_id, new_project_id, c["content"].as_str().unwrap_or(""), c["author"].as_str().unwrap_or("Author"), c["color"].as_str().unwrap_or("#f59e0b"), c["position_from"].as_i64().unwrap_or(0), c["position_to"].as_i64().unwrap_or(0), c["resolved"].as_bool().unwrap_or(false) as i32, c["comment_type"].as_str().unwrap_or("comment"), c["suggested_text"].as_str().unwrap_or(""), now_c],
                     )?;
                 }
             }

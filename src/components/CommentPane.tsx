@@ -8,9 +8,13 @@ interface CommentPaneProps {
   authorName: string;
   commentColor: string;
   onSelectComment?: (comment: EditorComment) => void;
+  onResolveComment?: (comment: EditorComment) => void;
+  onDeleteComment?: (comment: EditorComment) => void;
+  onAcceptSuggestion?: (comment: EditorComment) => void;
+  onRejectSuggestion?: (comment: EditorComment) => void;
 }
 
-export default function CommentPane({ chapterId, projectId: _projectId, authorName, commentColor: _commentColor, onSelectComment }: CommentPaneProps) {
+export default function CommentPane({ chapterId, projectId: _projectId, authorName, commentColor: _commentColor, onSelectComment, onResolveComment, onDeleteComment, onAcceptSuggestion, onRejectSuggestion }: CommentPaneProps) {
   const [comments, setComments] = useState<EditorComment[]>([]);
   const [repliesMap, setRepliesMap] = useState<Record<string, CommentReply[]>>({});
   const [replyText, setReplyText] = useState<Record<string, string>>({});
@@ -32,11 +36,28 @@ export default function CommentPane({ chapterId, projectId: _projectId, authorNa
 
   const handleResolve = async (c: EditorComment) => {
     await cmd.resolveEditorComment(c.id, !c.resolved);
+    if (!c.resolved) {
+      // Resolving: remove highlight
+      onResolveComment?.(c);
+    }
     loadComments();
   };
 
   const handleDelete = async (c: EditorComment) => {
+    onDeleteComment?.(c);
     await cmd.deleteEditorComment(c.id);
+    loadComments();
+  };
+
+  const handleAccept = async (c: EditorComment) => {
+    onAcceptSuggestion?.(c);
+    await cmd.resolveEditorComment(c.id, true);
+    loadComments();
+  };
+
+  const handleReject = async (c: EditorComment) => {
+    onRejectSuggestion?.(c);
+    await cmd.resolveEditorComment(c.id, true);
     loadComments();
   };
 
@@ -72,6 +93,7 @@ export default function CommentPane({ chapterId, projectId: _projectId, authorNa
         {comments.map((c) => {
           const replies = repliesMap[c.id] || [];
           const isExpanded = expandedId === c.id;
+          const isSuggestion = c.comment_type === "suggestion";
 
           return (
             <div
@@ -92,12 +114,30 @@ export default function CommentPane({ chapterId, projectId: _projectId, authorNa
                 }}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-stone-700 dark:text-sand-300">{c.author}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-medium text-stone-700 dark:text-sand-300">{c.author}</span>
+                    {isSuggestion && (
+                      <span className="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 uppercase">
+                        Edit
+                      </span>
+                    )}
+                  </div>
                   <span className="text-[10px] text-ink-muted dark:text-sand-400">
                     {new Date(c.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                   </span>
                 </div>
-                <p className="text-xs text-stone-600 dark:text-sand-300 mt-1 line-clamp-2">{c.content}</p>
+
+                {isSuggestion ? (
+                  <div className="mt-1.5 space-y-1">
+                    <div className="text-[10px] text-ink-muted dark:text-sand-400 uppercase tracking-wider">Original:</div>
+                    <p className="text-xs text-red-600 dark:text-red-400 line-through">{c.suggested_text}</p>
+                    <div className="text-[10px] text-ink-muted dark:text-sand-400 uppercase tracking-wider">Suggested:</div>
+                    <p className="text-xs text-green-600 dark:text-green-400">{c.content}</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-stone-600 dark:text-sand-300 mt-1 line-clamp-2">{c.content}</p>
+                )}
+
                 {replies.length > 0 && !isExpanded && (
                   <div className="text-[10px] text-sage-600 dark:text-sage-400 mt-1">{replies.length} repl{replies.length === 1 ? "y" : "ies"}</div>
                 )}
@@ -107,17 +147,34 @@ export default function CommentPane({ chapterId, projectId: _projectId, authorNa
               {isExpanded && (
                 <div className="border-t border-sand-200 dark:border-stone-700">
                   {/* Action buttons */}
-                  <div className="px-3 py-1.5 flex gap-2 border-b border-sand-100 dark:border-stone-700">
-                    <button
-                      onClick={() => handleResolve(c)}
-                      className={`px-2 py-0.5 text-[10px] rounded font-medium ${
-                        c.resolved
-                          ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300"
-                          : "bg-sage-100 dark:bg-sage-900/30 text-sage-700 dark:text-sage-300"
-                      }`}
-                    >
-                      {c.resolved ? "Reopen" : "Resolve"}
-                    </button>
+                  <div className="px-3 py-1.5 flex gap-2 border-b border-sand-100 dark:border-stone-700 flex-wrap">
+                    {isSuggestion && !c.resolved ? (
+                      <>
+                        <button
+                          onClick={() => handleAccept(c)}
+                          className="px-2 py-0.5 text-[10px] rounded font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                        >
+                          Accept
+                        </button>
+                        <button
+                          onClick={() => handleReject(c)}
+                          className="px-2 py-0.5 text-[10px] rounded font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
+                        >
+                          Reject
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => handleResolve(c)}
+                        className={`px-2 py-0.5 text-[10px] rounded font-medium ${
+                          c.resolved
+                            ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300"
+                            : "bg-sage-100 dark:bg-sage-900/30 text-sage-700 dark:text-sage-300"
+                        }`}
+                      >
+                        {c.resolved ? "Reopen" : "Resolve"}
+                      </button>
+                    )}
                     <button
                       onClick={() => handleDelete(c)}
                       className="px-2 py-0.5 text-[10px] rounded font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
