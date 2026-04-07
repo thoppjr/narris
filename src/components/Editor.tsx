@@ -19,7 +19,7 @@ function countWords(text: string): number {
   return text.trim() ? text.trim().split(/\s+/).length : 0;
 }
 
-function Toolbar({ editor, onToggleFindReplace, onToggleSprint, onSplit, onMerge, canMerge, onInsertFootnote, onInsertTextMessage, onInsertImage, onToggleDyslexic, dyslexicFont, typewriterMode, onToggleTypewriter, focusMode, onToggleFocus }: {
+function Toolbar({ editor, onToggleFindReplace, onToggleSprint, onSplit, onMerge, canMerge, onInsertFootnote, onInsertTextMessage, onInsertImage, onToggleDyslexic, dyslexicFont, typewriterMode, onToggleTypewriter, focusMode, onToggleFocus, editorMode, onAddComment }: {
   editor: ReturnType<typeof useEditor>;
   onToggleFindReplace: () => void;
   onToggleSprint: () => void;
@@ -35,6 +35,8 @@ function Toolbar({ editor, onToggleFindReplace, onToggleSprint, onSplit, onMerge
   onToggleTypewriter: () => void;
   focusMode: boolean;
   onToggleFocus: () => void;
+  editorMode?: boolean;
+  onAddComment?: () => void;
 }) {
   const { dark, toggle: toggleDark } = useThemeStore();
 
@@ -97,6 +99,16 @@ function Toolbar({ editor, onToggleFindReplace, onToggleSprint, onSplit, onMerge
           <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>
         </svg>
       </button>
+      {editorMode && onAddComment && (
+        <>
+          <div className="w-px h-5 bg-sand-300 dark:bg-stone-600 mx-1" />
+          <button onClick={onAddComment} className={toolBtn} title="Add Comment on Selection">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+            </svg>
+          </button>
+        </>
+      )}
 
       {/* Spacer */}
       <div className="flex-1" />
@@ -347,7 +359,14 @@ function TextMessageDialog({ isOpen, onClose, onInsertMultiple }: {
   );
 }
 
-export default function Editor() {
+interface EditorProps {
+  editorMode?: boolean;
+  spellcheck?: boolean;
+  commentColor?: string;
+  onAddComment?: (from: number, to: number, selectedText: string) => void;
+}
+
+export default function Editor({ editorMode = false, spellcheck = false, commentColor = "#f59e0b", onAddComment }: EditorProps) {
   const { chapters, activeChapterId, updateContent, splitChapter, mergeWithNext } = useChapterStore();
   const activeChapter = chapters.find((c) => c.id === activeChapterId);
   const activeIdx = chapters.findIndex((c) => c.id === activeChapterId);
@@ -540,6 +559,16 @@ export default function Editor() {
         onToggleTypewriter={() => setTypewriterMode((v) => !v)}
         focusMode={focusMode}
         onToggleFocus={() => setFocusMode((v) => !v)}
+        editorMode={editorMode}
+        onAddComment={editorMode ? () => {
+          if (!editor || !onAddComment) return;
+          const { from, to } = editor.state.selection;
+          if (from === to) return; // no selection
+          const selectedText = editor.state.doc.textBetween(from, to, " ");
+          // Highlight the selected text with the comment color
+          editor.chain().focus().setHighlight({ color: commentColor + "40" }).run();
+          onAddComment(from, to, selectedText);
+        } : undefined}
       />
 
       <FindReplace
@@ -573,7 +602,9 @@ export default function Editor() {
           style={{
             ...(dyslexicFont ? { fontFamily: "'OpenDyslexic', sans-serif" } : {}),
             ...(typewriterMode ? { paddingTop: "50vh", paddingBottom: "50vh" } : {}),
-          }}>
+          }}
+          spellCheck={spellcheck}
+        >
           <EditorContent editor={editor} />
         </div>
       </div>

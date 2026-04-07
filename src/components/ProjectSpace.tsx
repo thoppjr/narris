@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useProjectStore } from "../stores/projectStore";
 import { open } from "@tauri-apps/plugin-dialog";
-import { importDocx, createSection } from "../lib/commands";
+import { importDocx, createSection, importProjectFile } from "../lib/commands";
 
 interface ProjectSpaceProps {
   onOpenProject: (id: string) => void;
@@ -27,6 +27,21 @@ export default function ProjectSpace({ onOpenProject }: ProjectSpaceProps) {
   const handleDelete = async (id: string) => {
     await deleteProject(id);
     setConfirmDeleteId(null);
+  };
+
+  const handleImportNarras = async () => {
+    try {
+      const path = await open({
+        filters: [{ name: "Narras Project", extensions: ["narras"] }],
+        multiple: false,
+      });
+      if (!path) return;
+      const newProjectId = await importProjectFile(path as string);
+      await loadProjects();
+      onOpenProject(newProjectId);
+    } catch (err) {
+      console.error("Narras import failed:", err);
+    }
   };
 
   const handleImportDocx = async () => {
@@ -97,12 +112,21 @@ export default function ProjectSpace({ onOpenProject }: ProjectSpaceProps) {
           </button>
           <button
             onClick={handleImportDocx}
-            className="px-6 py-3 rounded-lg bg-sand-200 text-stone-700 font-medium
+            className="px-4 py-3 rounded-lg bg-sand-200 text-stone-700 font-medium
                        hover:bg-sand-300 active:bg-sand-400
-                       transition-colors duration-150"
+                       transition-colors duration-150 text-sm"
             title="Import from .docx file"
           >
-            Import
+            Import DOCX
+          </button>
+          <button
+            onClick={handleImportNarras}
+            className="px-4 py-3 rounded-lg bg-sage-100 text-sage-700 font-medium
+                       hover:bg-sage-200 active:bg-sage-300
+                       transition-colors duration-150 text-sm"
+            title="Open a shared .narras project file"
+          >
+            Open .narras
           </button>
         </div>
       </div>

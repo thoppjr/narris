@@ -120,6 +120,29 @@ pub struct ProjectImage {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct EditorComment {
+    pub id: String,
+    pub chapter_id: String,
+    pub project_id: String,
+    pub content: String,
+    pub author: String,
+    pub color: String,
+    pub position_from: i32,
+    pub position_to: i32,
+    pub resolved: bool,
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CommentReply {
+    pub id: String,
+    pub comment_id: String,
+    pub content: String,
+    pub author: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PlotPoint {
     pub id: String,
     pub project_id: String,
@@ -128,6 +151,7 @@ pub struct PlotPoint {
     pub color: String,
     pub pos_x: f64,
     pub pos_y: f64,
+    pub completed: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -312,7 +336,33 @@ impl Database {
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
             );
-            CREATE INDEX IF NOT EXISTS idx_project_images ON project_images(project_id);"
+            CREATE INDEX IF NOT EXISTS idx_project_images ON project_images(project_id);
+
+            CREATE TABLE IF NOT EXISTS editor_comments (
+                id TEXT PRIMARY KEY,
+                chapter_id TEXT NOT NULL,
+                project_id TEXT NOT NULL,
+                content TEXT NOT NULL DEFAULT '',
+                author TEXT NOT NULL DEFAULT 'Author',
+                color TEXT NOT NULL DEFAULT '#f59e0b',
+                position_from INTEGER NOT NULL DEFAULT 0,
+                position_to INTEGER NOT NULL DEFAULT 0,
+                resolved INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_editor_comments_chapter ON editor_comments(chapter_id);
+
+            CREATE TABLE IF NOT EXISTS comment_replies (
+                id TEXT PRIMARY KEY,
+                comment_id TEXT NOT NULL,
+                content TEXT NOT NULL DEFAULT '',
+                author TEXT NOT NULL DEFAULT 'Author',
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (comment_id) REFERENCES editor_comments(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_comment_replies ON comment_replies(comment_id);"
         )?;
         Ok(())
     }
@@ -321,6 +371,10 @@ impl Database {
         // Add parent_id column if missing (for existing databases)
         if self.conn.prepare("SELECT parent_id FROM chapters LIMIT 0").is_err() {
             self.conn.execute_batch("ALTER TABLE chapters ADD COLUMN parent_id TEXT")?;
+        }
+        // Add completed column to plot_points
+        if self.conn.prepare("SELECT completed FROM plot_points LIMIT 0").is_err() {
+            self.conn.execute_batch("ALTER TABLE plot_points ADD COLUMN completed INTEGER NOT NULL DEFAULT 0")?;
         }
         // Add project metadata columns
         if self.conn.prepare("SELECT isbn FROM projects LIMIT 0").is_err() {
@@ -408,6 +462,8 @@ impl Database {
         self.conn.execute("DELETE FROM plot_connections WHERE project_id = ?1", params![id])?;
         self.conn.execute("DELETE FROM characters WHERE project_id = ?1", params![id])?;
         self.conn.execute("DELETE FROM project_images WHERE project_id = ?1", params![id])?;
+        self.conn.execute("DELETE FROM comment_replies WHERE comment_id IN (SELECT id FROM editor_comments WHERE project_id = ?1)", params![id])?;
+        self.conn.execute("DELETE FROM editor_comments WHERE project_id = ?1", params![id])?;
         self.conn.execute("DELETE FROM projects WHERE id = ?1", params![id])?;
         Ok(())
     }
@@ -858,16 +914,16 @@ impl Database {
 
     pub fn create_plot_point(&self, id: &str, project_id: &str, title: &str, pos_x: f64, pos_y: f64) -> Result<PlotPoint> {
         self.conn.execute(
-            "INSERT INTO plot_points (id, project_id, title, description, color, pos_x, pos_y) VALUES (?1, ?2, ?3, '', '#7d967d', ?4, ?5)",
+            "INSERT INTO plot_points (id, project_id, title, description, color, pos_x, pos_y, completed) VALUES (?1, ?2, ?3, '', '#7d967d', ?4, ?5, 0)",
             params![id, project_id, title, pos_x, pos_y],
         )?;
-        Ok(PlotPoint { id: id.to_string(), project_id: project_id.to_string(), title: title.to_string(), description: String::new(), color: "#7d967d".to_string(), pos_x, pos_y })
+        Ok(PlotPoint { id: id.to_string(), project_id: project_id.to_string(), title: title.to_string(), description: String::new(), color: "#7d967d".to_string(), pos_x, pos_y, completed: false })
     }
 
     pub fn list_plot_points(&self, project_id: &str) -> Result<Vec<PlotPoint>> {
-        let mut stmt = self.conn.prepare("SELECT id, project_id, title, description, color, pos_x, pos_y FROM plot_points WHERE project_id = ?1")?;
+        let mut stmt = self.conn.prepare("SELECT id, project_id, title, description, color, pos_x, pos_y, completed FROM plot_points WHERE project_id = ?1")?;
         let rows = stmt.query_map(params![project_id], |row| {
-            Ok(PlotPoint { id: row.get(0)?, project_id: row.get(1)?, title: row.get(2)?, description: row.get(3)?, color: row.get(4)?, pos_x: row.get(5)?, pos_y: row.get(6)? })
+            Ok(PlotPoint { id: row.get(0)?, project_id: row.get(1)?, title: row.get(2)?, description: row.get(3)?, color: row.get(4)?, pos_x: row.get(5)?, pos_y: row.get(6)?, completed: row.get::<_, i32>(7)? != 0 })
         })?;
         rows.collect()
     }
@@ -876,6 +932,14 @@ impl Database {
         self.conn.execute(
             "UPDATE plot_points SET title = ?1, description = ?2, color = ?3, pos_x = ?4, pos_y = ?5 WHERE id = ?6",
             params![title, description, color, pos_x, pos_y, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn toggle_plot_point_completed(&self, id: &str, completed: bool) -> Result<()> {
+        self.conn.execute(
+            "UPDATE plot_points SET completed = ?1 WHERE id = ?2",
+            params![completed as i32, id],
         )?;
         Ok(())
     }
@@ -1041,6 +1105,232 @@ impl Database {
     pub fn delete_project_image(&self, id: &str) -> Result<()> {
         self.conn.execute("DELETE FROM project_images WHERE id = ?1", params![id])?;
         Ok(())
+    }
+
+    // --- Editor Comments ---
+
+    pub fn create_editor_comment(&self, id: &str, chapter_id: &str, project_id: &str, content: &str, author: &str, color: &str, position_from: i32, position_to: i32) -> Result<EditorComment> {
+        let now = chrono::Utc::now().to_rfc3339();
+        self.conn.execute(
+            "INSERT INTO editor_comments (id, chapter_id, project_id, content, author, color, position_from, position_to, resolved, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9)",
+            params![id, chapter_id, project_id, content, author, color, position_from, position_to, now],
+        )?;
+        Ok(EditorComment { id: id.to_string(), chapter_id: chapter_id.to_string(), project_id: project_id.to_string(), content: content.to_string(), author: author.to_string(), color: color.to_string(), position_from, position_to, resolved: false, created_at: now })
+    }
+
+    pub fn list_editor_comments(&self, chapter_id: &str) -> Result<Vec<EditorComment>> {
+        let mut stmt = self.conn.prepare("SELECT id, chapter_id, project_id, content, author, color, position_from, position_to, resolved, created_at FROM editor_comments WHERE chapter_id = ?1 ORDER BY position_from ASC")?;
+        let rows = stmt.query_map(params![chapter_id], |row| {
+            Ok(EditorComment { id: row.get(0)?, chapter_id: row.get(1)?, project_id: row.get(2)?, content: row.get(3)?, author: row.get(4)?, color: row.get(5)?, position_from: row.get(6)?, position_to: row.get(7)?, resolved: row.get::<_, i32>(8)? != 0, created_at: row.get(9)? })
+        })?;
+        rows.collect()
+    }
+
+    pub fn list_project_comments(&self, project_id: &str) -> Result<Vec<EditorComment>> {
+        let mut stmt = self.conn.prepare("SELECT id, chapter_id, project_id, content, author, color, position_from, position_to, resolved, created_at FROM editor_comments WHERE project_id = ?1 ORDER BY created_at ASC")?;
+        let rows = stmt.query_map(params![project_id], |row| {
+            Ok(EditorComment { id: row.get(0)?, chapter_id: row.get(1)?, project_id: row.get(2)?, content: row.get(3)?, author: row.get(4)?, color: row.get(5)?, position_from: row.get(6)?, position_to: row.get(7)?, resolved: row.get::<_, i32>(8)? != 0, created_at: row.get(9)? })
+        })?;
+        rows.collect()
+    }
+
+    pub fn resolve_editor_comment(&self, id: &str, resolved: bool) -> Result<()> {
+        self.conn.execute("UPDATE editor_comments SET resolved = ?1 WHERE id = ?2", params![resolved as i32, id])?;
+        Ok(())
+    }
+
+    pub fn delete_editor_comment(&self, id: &str) -> Result<()> {
+        self.conn.execute("DELETE FROM comment_replies WHERE comment_id = ?1", params![id])?;
+        self.conn.execute("DELETE FROM editor_comments WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    pub fn create_comment_reply(&self, id: &str, comment_id: &str, content: &str, author: &str) -> Result<CommentReply> {
+        let now = chrono::Utc::now().to_rfc3339();
+        self.conn.execute(
+            "INSERT INTO comment_replies (id, comment_id, content, author, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![id, comment_id, content, author, now],
+        )?;
+        Ok(CommentReply { id: id.to_string(), comment_id: comment_id.to_string(), content: content.to_string(), author: author.to_string(), created_at: now })
+    }
+
+    pub fn list_comment_replies(&self, comment_id: &str) -> Result<Vec<CommentReply>> {
+        let mut stmt = self.conn.prepare("SELECT id, comment_id, content, author, created_at FROM comment_replies WHERE comment_id = ?1 ORDER BY created_at ASC")?;
+        let rows = stmt.query_map(params![comment_id], |row| {
+            Ok(CommentReply { id: row.get(0)?, comment_id: row.get(1)?, content: row.get(2)?, author: row.get(3)?, created_at: row.get(4)? })
+        })?;
+        rows.collect()
+    }
+
+    // --- Full Project Export ---
+
+    pub fn export_project_file(&self, project_id: &str) -> Result<String> {
+        let project = self.conn.query_row(
+            "SELECT id, title, author, genre, isbn, copyright_year, publisher, bleed_enabled, bleed_size_in, created_at, updated_at FROM projects WHERE id = ?1",
+            params![project_id],
+            |row| Ok(Project { id: row.get(0)?, title: row.get(1)?, author: row.get(2)?, genre: row.get(3)?, isbn: row.get(4)?, copyright_year: row.get(5)?, publisher: row.get(6)?, bleed_enabled: row.get::<_, i32>(7)? != 0, bleed_size_in: row.get(8)?, created_at: row.get(9)?, updated_at: row.get(10)? }),
+        )?;
+        let chapters = self.list_chapters(project_id)?;
+        let plot_points = self.list_plot_points(project_id)?;
+        let plot_connections = self.list_plot_connections(project_id)?;
+        let characters = self.list_characters(project_id)?;
+        let formatting = self.get_formatting_settings(project_id)?;
+        let comments = self.list_project_comments(project_id)?;
+
+        // Gather replies for all comments
+        let mut all_replies: Vec<CommentReply> = Vec::new();
+        for c in &comments {
+            all_replies.extend(self.list_comment_replies(&c.id)?);
+        }
+
+        let data = serde_json::json!({
+            "narras_version": "1.0",
+            "project": project,
+            "chapters": chapters,
+            "plot_points": plot_points,
+            "plot_connections": plot_connections,
+            "characters": characters,
+            "formatting": formatting,
+            "comments": comments,
+            "comment_replies": all_replies,
+        });
+
+        Ok(serde_json::to_string_pretty(&data).unwrap_or_default())
+    }
+
+    pub fn import_project_file(&self, json_str: &str) -> Result<String> {
+        let data: serde_json::Value = serde_json::from_str(json_str)
+            .map_err(|e| rusqlite::Error::InvalidParameterName(format!("Invalid narras file: {}", e)))?;
+
+        let project: Project = serde_json::from_value(data["project"].clone())
+            .map_err(|e| rusqlite::Error::InvalidParameterName(format!("Bad project data: {}", e)))?;
+
+        // Generate new ID so imports don't conflict
+        let new_project_id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().to_rfc3339();
+
+        self.conn.execute(
+            "INSERT INTO projects (id, title, author, genre, isbn, copyright_year, publisher, bleed_enabled, bleed_size_in, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)",
+            params![new_project_id, project.title, project.author, project.genre, project.isbn, project.copyright_year, project.publisher, project.bleed_enabled as i32, project.bleed_size_in, now],
+        )?;
+
+        // Import chapters with new IDs (map old -> new for comments)
+        let mut chapter_id_map = std::collections::HashMap::new();
+        if let Some(chapters) = data["chapters"].as_array() {
+            for ch in chapters {
+                let old_id = ch["id"].as_str().unwrap_or("");
+                let new_id = uuid::Uuid::new_v4().to_string();
+                chapter_id_map.insert(old_id.to_string(), new_id.clone());
+                self.conn.execute(
+                    "INSERT INTO chapters (id, project_id, title, content, sort_order, chapter_type, word_count, parent_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)",
+                    params![new_id, new_project_id, ch["title"].as_str().unwrap_or(""), ch["content"].as_str().unwrap_or(""), ch["sort_order"].as_i64().unwrap_or(0), ch["chapter_type"].as_str().unwrap_or("chapter"), ch["word_count"].as_i64().unwrap_or(0), ch["parent_id"].as_str(), now],
+                )?;
+            }
+        }
+
+        // Import plot points with new IDs
+        let mut pp_id_map = std::collections::HashMap::new();
+        if let Some(points) = data["plot_points"].as_array() {
+            for pp in points {
+                let old_id = pp["id"].as_str().unwrap_or("");
+                let new_id = uuid::Uuid::new_v4().to_string();
+                pp_id_map.insert(old_id.to_string(), new_id.clone());
+                self.conn.execute(
+                    "INSERT INTO plot_points (id, project_id, title, description, color, pos_x, pos_y, completed) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    params![new_id, new_project_id, pp["title"].as_str().unwrap_or(""), pp["description"].as_str().unwrap_or(""), pp["color"].as_str().unwrap_or("#7d967d"), pp["pos_x"].as_f64().unwrap_or(0.0), pp["pos_y"].as_f64().unwrap_or(0.0), pp["completed"].as_bool().unwrap_or(false) as i32],
+                )?;
+            }
+        }
+
+        // Import plot connections
+        if let Some(conns) = data["plot_connections"].as_array() {
+            for conn_val in conns {
+                let src = conn_val["source_id"].as_str().unwrap_or("");
+                let tgt = conn_val["target_id"].as_str().unwrap_or("");
+                if let (Some(new_src), Some(new_tgt)) = (pp_id_map.get(src), pp_id_map.get(tgt)) {
+                    self.conn.execute(
+                        "INSERT INTO plot_connections (id, project_id, source_id, target_id) VALUES (?1, ?2, ?3, ?4)",
+                        params![uuid::Uuid::new_v4().to_string(), new_project_id, new_src, new_tgt],
+                    )?;
+                }
+            }
+        }
+
+        // Import characters
+        if let Some(chars) = data["characters"].as_array() {
+            for ch in chars {
+                self.conn.execute(
+                    "INSERT INTO characters (id, project_id, name, fields) VALUES (?1, ?2, ?3, ?4)",
+                    params![uuid::Uuid::new_v4().to_string(), new_project_id, ch["name"].as_str().unwrap_or(""), ch["fields"].as_str().unwrap_or("{}")],
+                )?;
+            }
+        }
+
+        // Import formatting
+        if let Some(fmt) = data.get("formatting") {
+            if !fmt.is_null() {
+                self.conn.execute(
+                    "INSERT INTO formatting_settings (id, project_id, template_name, body_font, heading_font, body_size_pt, heading_size_pt, line_height, paragraph_spacing_em, paragraph_indent_em, margin_top_in, margin_bottom_in, margin_inner_in, margin_outer_in, drop_cap_enabled, drop_cap_lines, lead_in_style, lead_in_words, scene_break_style, scene_break_custom, justify_text) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
+                    params![
+                        uuid::Uuid::new_v4().to_string(), new_project_id,
+                        fmt["template_name"].as_str().unwrap_or("custom"),
+                        fmt["body_font"].as_str().unwrap_or("Georgia"),
+                        fmt["heading_font"].as_str().unwrap_or("sans-serif"),
+                        fmt["body_size_pt"].as_f64().unwrap_or(11.0),
+                        fmt["heading_size_pt"].as_f64().unwrap_or(18.0),
+                        fmt["line_height"].as_f64().unwrap_or(1.6),
+                        fmt["paragraph_spacing_em"].as_f64().unwrap_or(0.0),
+                        fmt["paragraph_indent_em"].as_f64().unwrap_or(1.5),
+                        fmt["margin_top_in"].as_f64().unwrap_or(0.75),
+                        fmt["margin_bottom_in"].as_f64().unwrap_or(0.75),
+                        fmt["margin_inner_in"].as_f64().unwrap_or(0.875),
+                        fmt["margin_outer_in"].as_f64().unwrap_or(0.625),
+                        fmt["drop_cap_enabled"].as_bool().unwrap_or(false) as i32,
+                        fmt["drop_cap_lines"].as_i64().unwrap_or(3),
+                        fmt["lead_in_style"].as_str().unwrap_or("none"),
+                        fmt["lead_in_words"].as_i64().unwrap_or(3),
+                        fmt["scene_break_style"].as_str().unwrap_or("asterisks"),
+                        fmt["scene_break_custom"].as_str().unwrap_or(""),
+                        fmt["justify_text"].as_bool().unwrap_or(true) as i32
+                    ],
+                )?;
+            }
+        }
+
+        // Import comments
+        let mut comment_id_map = std::collections::HashMap::new();
+        if let Some(comments) = data["comments"].as_array() {
+            for c in comments {
+                let old_id = c["id"].as_str().unwrap_or("");
+                let new_id = uuid::Uuid::new_v4().to_string();
+                comment_id_map.insert(old_id.to_string(), new_id.clone());
+                let old_ch_id = c["chapter_id"].as_str().unwrap_or("");
+                let new_ch_id = chapter_id_map.get(old_ch_id).cloned().unwrap_or_default();
+                if !new_ch_id.is_empty() {
+                    let now_c = chrono::Utc::now().to_rfc3339();
+                    self.conn.execute(
+                        "INSERT INTO editor_comments (id, chapter_id, project_id, content, author, color, position_from, position_to, resolved, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                        params![new_id, new_ch_id, new_project_id, c["content"].as_str().unwrap_or(""), c["author"].as_str().unwrap_or("Author"), c["color"].as_str().unwrap_or("#f59e0b"), c["position_from"].as_i64().unwrap_or(0), c["position_to"].as_i64().unwrap_or(0), c["resolved"].as_bool().unwrap_or(false) as i32, now_c],
+                    )?;
+                }
+            }
+        }
+
+        // Import comment replies
+        if let Some(replies) = data["comment_replies"].as_array() {
+            for r in replies {
+                let old_cid = r["comment_id"].as_str().unwrap_or("");
+                if let Some(new_cid) = comment_id_map.get(old_cid) {
+                    let now_r = chrono::Utc::now().to_rfc3339();
+                    self.conn.execute(
+                        "INSERT INTO comment_replies (id, comment_id, content, author, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                        params![uuid::Uuid::new_v4().to_string(), new_cid, r["content"].as_str().unwrap_or(""), r["author"].as_str().unwrap_or("Author"), now_r],
+                    )?;
+                }
+            }
+        }
+
+        Ok(new_project_id)
     }
 
     // --- Backup ---
