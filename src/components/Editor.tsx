@@ -4,7 +4,6 @@ import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
 import Typography from "@tiptap/extension-typography";
-import Highlight from "@tiptap/extension-highlight";
 import { DOMSerializer } from "@tiptap/pm/model";
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useChapterStore } from "../stores/chapterStore";
@@ -14,6 +13,7 @@ import SprintTimer from "./SprintTimer";
 import { Footnote } from "../extensions/Footnote";
 import { TextMessage } from "../extensions/TextMessage";
 import { InlineImage } from "../extensions/InlineImage";
+import { CommentHighlight } from "../extensions/CommentHighlight";
 
 function countWords(text: string): number {
   return text.trim() ? text.trim().split(/\s+/).length : 0;
@@ -362,11 +362,11 @@ function TextMessageDialog({ isOpen, onClose, onInsertMultiple }: {
 interface EditorProps {
   editorMode?: boolean;
   spellcheck?: boolean;
-  commentColor?: string;
   onAddComment?: (from: number, to: number, selectedText: string) => void;
+  onEditorReady?: (editor: ReturnType<typeof useEditor>) => void;
 }
 
-export default function Editor({ editorMode = false, spellcheck = false, commentColor = "#f59e0b", onAddComment }: EditorProps) {
+export default function Editor({ editorMode = false, spellcheck = false, onAddComment, onEditorReady }: EditorProps) {
   const { chapters, activeChapterId, updateContent, splitChapter, mergeWithNext } = useChapterStore();
   const activeChapter = chapters.find((c) => c.id === activeChapterId);
   const activeIdx = chapters.findIndex((c) => c.id === activeChapterId);
@@ -405,11 +405,16 @@ export default function Editor({ editorMode = false, spellcheck = false, comment
       Underline,
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       Typography,
-      Highlight,
+      CommentHighlight,
       Footnote,
       TextMessage,
       InlineImage,
     ],
+    editorProps: {
+      attributes: {
+        spellcheck: spellcheck ? "true" : "false",
+      },
+    },
     content: "",
     onUpdate: ({ editor: ed }) => {
       if (isSettingContent.current) return;
@@ -418,6 +423,26 @@ export default function Editor({ editorMode = false, spellcheck = false, comment
       }
     },
   });
+
+  // Expose editor instance to parent
+  useEffect(() => {
+    if (editor && onEditorReady) {
+      onEditorReady(editor);
+    }
+  }, [editor, onEditorReady]);
+
+  // Update spellcheck attribute dynamically
+  useEffect(() => {
+    if (editor) {
+      editor.setOptions({
+        editorProps: {
+          attributes: {
+            spellcheck: spellcheck ? "true" : "false",
+          },
+        },
+      });
+    }
+  }, [editor, spellcheck]);
 
   // Ctrl+F shortcut
   useEffect(() => {
@@ -565,8 +590,6 @@ export default function Editor({ editorMode = false, spellcheck = false, comment
           const { from, to } = editor.state.selection;
           if (from === to) return; // no selection
           const selectedText = editor.state.doc.textBetween(from, to, " ");
-          // Highlight the selected text with the comment color
-          editor.chain().focus().setHighlight({ color: commentColor + "40" }).run();
           onAddComment(from, to, selectedText);
         } : undefined}
       />
@@ -603,7 +626,6 @@ export default function Editor({ editorMode = false, spellcheck = false, comment
             ...(dyslexicFont ? { fontFamily: "'OpenDyslexic', sans-serif" } : {}),
             ...(typewriterMode ? { paddingTop: "50vh", paddingBottom: "50vh" } : {}),
           }}
-          spellCheck={spellcheck}
         >
           <EditorContent editor={editor} />
         </div>

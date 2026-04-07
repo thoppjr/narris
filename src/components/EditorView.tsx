@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import Sidebar from "./Sidebar";
 import Editor from "./Editor";
@@ -20,6 +20,7 @@ import { useChapterStore } from "../stores/chapterStore";
 import { useProjectStore } from "../stores/projectStore";
 import { useFormattingStore } from "../stores/formattingStore";
 import { updateProject, exportProjectFile, createEditorComment } from "../lib/commands";
+import type { EditorComment } from "../lib/commands";
 
 type View = "editor" | "plot" | "characters" | "formatting" | "habits" | "preview" | "themes" | "master-pages" | "images" | "settings" | "cover";
 
@@ -45,6 +46,8 @@ export default function EditorView({ projectId, onBack }: EditorViewProps) {
   const [commentColor, setCommentColor] = useState("#f59e0b");
   const [showEditorModePanel, setShowEditorModePanel] = useState(false);
   const commentPaneKey = useChapterStore.getState().activeChapterId || "";
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const editorRef = useRef<any>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +86,20 @@ export default function EditorView({ projectId, onBack }: EditorViewProps) {
       clearFormatting();
     };
   }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleEditorReady = useCallback((editor: unknown) => {
+    editorRef.current = editor;
+  }, []);
+
+  const removeHighlight = useCallback((commentId: string) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    try {
+      editor.chain().focus().removeCommentHighlightById(commentId).run();
+    } catch {
+      // Mark might not exist in current content
+    }
+  }, []);
 
   if (!project) return null;
 
@@ -165,12 +182,80 @@ export default function EditorView({ projectId, onBack }: EditorViewProps) {
     }
   };
 
-  const handleAddComment = async (from: number, to: number, _selectedText: string) => {
+  const handleAddComment = async (from: number, to: number, selectedText: string) => {
     const chapterId = useChapterStore.getState().activeChapterId;
     if (!chapterId) return;
     const commentText = prompt("Add comment:", "");
     if (!commentText?.trim()) return;
-    await createEditorComment(chapterId, projectId, commentText.trim(), project.author || "Author", commentColor, from, to);
+    const comment = await createEditorComment(chapterId, projectId, commentText.trim(), project.author || "Author", commentColor, from, to, "comment", selectedText);
+    // Add highlight mark to editor
+    const editor = editorRef.current;
+    if (editor) {
+      editor.chain().focus()
+        .setTextSelection({ from, to })
+        .setCommentHighlight({ commentId: comment.id, color: commentColor + "40" })
+        .run();
+    }
+  };
+
+  const handleResolveComment = (comment: EditorComment) => {
+    removeHighlight(comment.id);
+  };
+
+  const handleDeleteComment = (comment: EditorComment) => {
+    removeHighlight(comment.id);
+  };
+
+  const handleAcceptSuggestion = (comment: EditorComment) => {
+    // The suggested new text is in comment.content, the original is in comment.suggested_text
+    // The text is already in the editor (it was typed as a suggestion), so we just remove the highlight
+    removeHighlight(comment.id);
+  };
+
+  const handleRejectSuggestion = (comment: EditorComment) => {
+    // Revert the text: replace the current content at the position with the original text
+    const editor = editorRef.current;
+    if (!editor) {
+      removeHighlight(comment.id);
+      return;
+    }
+
+    // Find the mark in the document and replace the text under it with original
+    const { doc } = editor.state;
+    const markType = editor.state.schema.marks.commentHighlight;
+    if (!markType) {
+      removeHighlight(comment.id);
+      return;
+    }
+
+    let markFrom = -1;
+    let markTo = -1;
+    doc.descendants((node: { marks: Array<{ type: unknown; attrs: { commentId: string } }>; nodeSize: number }, pos: number) => {
+      node.marks.forEach((mark: { type: unknown; attrs: { commentId: string } }) => {
+        if (mark.type === markType && mark.attrs.commentId === comment.id) {
+          if (markFrom === -1) markFrom = pos;
+          markTo = pos + node.nodeSize;
+        }
+      });
+    });
+
+    if (markFrom >= 0 && markTo >= 0 && comment.suggested_text) {
+      // Replace with original text and remove highlight
+      editor.chain().focus()
+        .setTextSelection({ from: markFrom, to: markTo })
+        .insertContent(comment.suggested_text)
+        .removeCommentHighlightById(comment.id)
+        .run();
+    } else {
+      removeHighlight(comment.id);
+    }
+  };
+
+  const handleOneTimeSpellcheck = () => {
+    // Enable spellcheck temporarily, then let user review
+    setSpellcheck(true);
+    // Auto-disable after 30 seconds so it's a "one-time check"
+    setTimeout(() => setSpellcheck(false), 30000);
   };
 
   return (
@@ -220,6 +305,13 @@ export default function EditorView({ projectId, onBack }: EditorViewProps) {
             </label>
           </div>
 
+          <button
+            onClick={handleOneTimeSpellcheck}
+            className="w-full px-3 py-1.5 text-xs rounded-lg bg-sage-100 dark:bg-sage-900/30 text-sage-700 dark:text-sage-300 font-medium hover:bg-sage-200 dark:hover:bg-sage-900/50 transition-colors"
+          >
+            {spellcheck ? "Spellcheck active (30s)" : "One-time Spell Check"}
+          </button>
+
           <div>
             <label className="block text-[10px] font-medium text-ink-muted dark:text-sand-400 uppercase tracking-wider mb-1">Comment Color</label>
             <div className="flex gap-1.5 flex-wrap">
@@ -243,8 +335,8 @@ export default function EditorView({ projectId, onBack }: EditorViewProps) {
       <Editor
         editorMode={editorMode}
         spellcheck={spellcheck}
-        commentColor={commentColor}
         onAddComment={editorMode ? handleAddComment : undefined}
+        onEditorReady={handleEditorReady}
       />
 
       {/* Plot sidebar */}
@@ -260,6 +352,10 @@ export default function EditorView({ projectId, onBack }: EditorViewProps) {
           projectId={projectId}
           authorName={project.author || "Author"}
           commentColor={commentColor}
+          onResolveComment={handleResolveComment}
+          onDeleteComment={handleDeleteComment}
+          onAcceptSuggestion={handleAcceptSuggestion}
+          onRejectSuggestion={handleRejectSuggestion}
         />
       )}
 

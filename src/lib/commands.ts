@@ -223,6 +223,8 @@ export interface EditorComment {
   position_from: number;
   position_to: number;
   resolved: boolean;
+  comment_type: string;      // "comment" or "suggestion"
+  suggested_text: string;    // original text for suggestions
   created_at: string;
 }
 
@@ -234,8 +236,8 @@ export interface CommentReply {
   created_at: string;
 }
 
-export function createEditorComment(chapterId: string, projectId: string, content: string, author: string, color: string, positionFrom: number, positionTo: number): Promise<EditorComment> {
-  return invoke("create_editor_comment", { chapterId, projectId, content, author, color, positionFrom, positionTo });
+export function createEditorComment(chapterId: string, projectId: string, content: string, author: string, color: string, positionFrom: number, positionTo: number, commentType: string = "comment", suggestedText: string = ""): Promise<EditorComment> {
+  return invoke("create_editor_comment", { chapterId, projectId, content, author, color, positionFrom, positionTo, commentType, suggestedText });
 }
 
 export function listEditorComments(chapterId: string): Promise<EditorComment[]> {
