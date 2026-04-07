@@ -1,3 +1,79 @@
+/// Generates a PDF file by first creating print-ready HTML, then converting via system Chromium.
+/// Falls back to HTML output if no PDF converter is found.
+
+pub fn generate_pdf(
+    metadata: &PdfMetadata,
+    chapters: &[PdfChapter],
+    formatting: Option<&PdfFormatting>,
+    output_path: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Generate HTML to a temp file
+    let temp_html = output_path.with_extension("_temp_print.html");
+    generate_print_html(metadata, chapters, formatting, &temp_html)?;
+
+    let temp_html_uri = format!("file://{}", temp_html.display());
+
+    // Try available PDF converters
+    let browsers = [
+        "chromium-browser",
+        "chromium",
+        "google-chrome-stable",
+        "google-chrome",
+    ];
+
+    let mut pdf_generated = false;
+
+    for browser in &browsers {
+        let result = std::process::Command::new(browser)
+            .args([
+                "--headless",
+                "--disable-gpu",
+                "--no-sandbox",
+                "--disable-software-rasterizer",
+                "--run-all-compositor-stages-before-draw",
+                &format!("--print-to-pdf={}", output_path.display()),
+                &temp_html_uri,
+            ])
+            .output();
+
+        if let Ok(output) = result {
+            if output.status.success() && output_path.exists() {
+                pdf_generated = true;
+                break;
+            }
+        }
+    }
+
+    // Try wkhtmltopdf as fallback
+    if !pdf_generated {
+        let result = std::process::Command::new("wkhtmltopdf")
+            .args([
+                "--page-size", "Custom",
+                "--quiet",
+                temp_html.to_str().unwrap_or(""),
+                output_path.to_str().unwrap_or(""),
+            ])
+            .output();
+
+        if let Ok(output) = result {
+            if output.status.success() && output_path.exists() {
+                pdf_generated = true;
+            }
+        }
+    }
+
+    // Clean up temp file
+    let _ = std::fs::remove_file(&temp_html);
+
+    if !pdf_generated {
+        // Fall back: write HTML directly to output path
+        generate_print_html(metadata, chapters, formatting, output_path)?;
+        return Err("PDF conversion failed. Install chromium-browser for PDF export: sudo apt install chromium-browser. HTML file saved instead.".into());
+    }
+
+    Ok(())
+}
+
 /// Generates a print-ready HTML file styled for PDF printing.
 /// Users can open this in a browser and use Print > Save as PDF.
 
@@ -69,7 +145,7 @@ pub fn generate_print_html(
 
     // Front matter
     for section in &front_matter {
-        let content = process_footnotes(&section.content);
+        let content = process_footnotes(&process_text_messages(&section.content));
         chapter_html.push_str(&format!(
             r#"<div class="front-matter">
 <h1 class="front-title">{}</h1>
@@ -88,7 +164,7 @@ pub fn generate_print_html(
             chapter_html.push_str(r#"<div class="page-break"></div>"#);
         }
 
-        let content = process_footnotes(&section.content);
+        let content = process_footnotes(&process_text_messages(&section.content));
         if section.chapter_type == "part" {
             chapter_html.push_str(&format!(
                 r#"<div class="part-page">
@@ -112,7 +188,7 @@ pub fn generate_print_html(
 
     // Back matter
     for section in &back_matter {
-        let content = process_footnotes(&section.content);
+        let content = process_footnotes(&process_text_messages(&section.content));
         chapter_html.push_str(&format!(
             r#"<div class="page-break"></div>
 <div class="back-matter">
@@ -320,6 +396,82 @@ h2, h3 {{ font-family: "{heading_font}", sans-serif; }}
 
     std::fs::write(output_path, html)?;
     Ok(())
+}
+
+/// Convert text-message divs into clean HTML for print.
+fn process_text_messages(content: &str) -> String {
+    let mut result = content.to_string();
+    let mut search_pos = 0;
+
+    while let Some(start) = result[search_pos..].find("<div data-text-message") {
+        let abs_start = search_pos + start;
+        let mut depth = 0;
+        let mut pos = abs_start;
+        let mut end_pos = None;
+        while pos < result.len() {
+            if result[pos..].starts_with("<div") {
+                depth += 1;
+                pos += 4;
+            } else if result[pos..].starts_with("</div>") {
+                depth -= 1;
+                if depth == 0 {
+                    end_pos = Some(pos + 6);
+                    break;
+                }
+                pos += 6;
+            } else {
+                pos += 1;
+            }
+        }
+
+        if let Some(abs_end) = end_pos {
+            let block = &result[abs_start..abs_end];
+            let sender = extract_attr(block, "data-sender")
+                .or_else(|| {
+                    if let Some(s) = block.find("text-message-sender") {
+                        if let Some(gt) = block[s..].find('>') {
+                            let after = &block[s + gt + 1..];
+                            if let Some(lt) = after.find('<') {
+                                return Some(after[..lt].to_string());
+                            }
+                        }
+                    }
+                    None
+                })
+                .unwrap_or_default();
+            let text_content = extract_attr(block, "data-text")
+                .or_else(|| {
+                    if let Some(s) = block.find("text-message-bubble") {
+                        if let Some(gt) = block[s..].find('>') {
+                            let after = &block[s + gt + 1..];
+                            if let Some(lt) = after.find('<') {
+                                return Some(after[..lt].to_string());
+                            }
+                        }
+                    }
+                    None
+                })
+                .unwrap_or_default();
+            let side = extract_attr(block, "data-side").unwrap_or_else(|| "left".to_string());
+            let is_right = side == "right";
+            let align = if is_right { "right" } else { "left" };
+
+            let replacement = format!(
+                r#"<div style="text-align: {align}; margin: 0.5em 0;"><div style="font-size: 0.75em; color: #888;">{sender}</div><div style="display: inline-block; background: {bg}; color: {fg}; padding: 0.5em 1em; border-radius: 1em; max-width: 75%; text-align: left;">{text}</div></div>"#,
+                align = align,
+                sender = escape_html(&sender),
+                bg = if is_right { "#4a6249" } else { "#e8e0d4" },
+                fg = if is_right { "#ffffff" } else { "#333333" },
+                text = escape_html(&text_content),
+            );
+            result = format!("{}{}{}", &result[..abs_start], replacement, &result[abs_end..]);
+            search_pos = abs_start + replacement.len();
+        } else {
+            search_pos = abs_start + 1;
+        }
+    }
+
+    result
 }
 
 /// Process TipTap footnote spans into numbered references + endnotes section.

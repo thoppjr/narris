@@ -36,6 +36,9 @@ export const TextMessage = Node.create({
       "div",
       mergeAttributes(HTMLAttributes, {
         "data-text-message": "",
+        "data-sender": HTMLAttributes.sender,
+        "data-text": HTMLAttributes.text,
+        "data-side": HTMLAttributes.side,
         class: "text-message-wrapper",
         style: `display: flex; flex-direction: column; align-items: ${isRight ? "flex-end" : "flex-start"}; margin: 8px 0; max-width: 100%;`,
       }),

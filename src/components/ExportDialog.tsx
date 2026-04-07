@@ -40,12 +40,21 @@ export default function ExportDialog({ projectId, projectTitle, isOpen, onClose 
         }
       } else if (format === "pdf") {
         const path = await save({
-          defaultPath: `${defaultName}-print.html`,
-          filters: [{ name: "Print-Ready HTML", extensions: ["html"] }],
+          defaultPath: `${defaultName}.pdf`,
+          filters: [{ name: "PDF", extensions: ["pdf"] }],
         });
         if (path) {
-          await cmd.exportPdf(projectId, path, trimSize);
-          setResult(`Exported to ${path}\nOpen in browser and use Print > Save as PDF`);
+          try {
+            await cmd.exportPdf(projectId, path, trimSize);
+            setResult(`Exported to ${path}`);
+          } catch (err) {
+            const errStr = String(err);
+            if (errStr.includes("chromium")) {
+              setResult(`${errStr}\nFile saved as HTML at: ${path}`);
+            } else {
+              throw err;
+            }
+          }
         }
       } else if (format === "docx") {
         const path = await save({
@@ -58,12 +67,21 @@ export default function ExportDialog({ projectId, projectTitle, isOpen, onClose 
         }
       } else if (format === "large-print") {
         const path = await save({
-          defaultPath: `${defaultName}-large-print.html`,
-          filters: [{ name: "Large Print HTML", extensions: ["html"] }],
+          defaultPath: `${defaultName}-large-print.pdf`,
+          filters: [{ name: "PDF", extensions: ["pdf"] }],
         });
         if (path) {
-          await cmd.exportPdfLargePrint(projectId, path, trimSize);
-          setResult(`Exported to ${path}\nOpen in browser and use Print > Save as PDF`);
+          try {
+            await cmd.exportPdfLargePrint(projectId, path, trimSize);
+            setResult(`Exported to ${path}`);
+          } catch (err) {
+            const errStr = String(err);
+            if (errStr.includes("chromium")) {
+              setResult(`${errStr}\nFile saved as HTML at: ${path}`);
+            } else {
+              throw err;
+            }
+          }
         }
       } else if (format === "box-set") {
         if (boxSetIds.length === 0) {
