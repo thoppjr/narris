@@ -558,9 +558,12 @@ export default function Editor() {
         isOpen={showTextMessageDialog}
         onClose={() => setShowTextMessageDialog(false)}
         onInsertMultiple={(messages) => {
-          messages.forEach((msg) => {
-            editor?.commands.insertTextMessage(msg);
-          });
+          if (!editor || messages.length === 0) return;
+          const content = messages.map((msg) => ({
+            type: "textMessage",
+            attrs: { sender: msg.sender, text: msg.text, side: msg.side, color: msg.color },
+          }));
+          editor.chain().focus().insertContent(content).run();
         }}
       />
 

@@ -501,7 +501,7 @@ fn export_pdf(state: State<AppState>, project_id: String, output_path: String, t
         justify_text: f.justify_text,
     });
 
-    pdf::generate_print_html(&metadata, &pdf_chapters, pdf_formatting.as_ref(), std::path::Path::new(&output_path))
+    pdf::generate_pdf(&metadata, &pdf_chapters, pdf_formatting.as_ref(), std::path::Path::new(&output_path))
         .map_err(|e| e.to_string())
 }
 
@@ -569,7 +569,7 @@ fn export_pdf_large_print(state: State<AppState>, project_id: String, output_pat
         justify_text: false,
     };
 
-    pdf::generate_print_html(&metadata, &pdf_chapters, Some(&large_print), std::path::Path::new(&output_path))
+    pdf::generate_pdf(&metadata, &pdf_chapters, Some(&large_print), std::path::Path::new(&output_path))
         .map_err(|e| e.to_string())
 }
 

@@ -31,6 +31,7 @@ interface CoverState {
   backBlurb: string;
   backBlurbSize: number;
   backBlurbColor: string;
+  barcodeImage: string; // data URL for imported barcode
   paperType: "white" | "cream";
 }
 
@@ -78,6 +79,7 @@ export default function CoverEditor({
     backBlurb: "Your book description goes here. Write a compelling back cover blurb that hooks readers...",
     backBlurbSize: 14,
     backBlurbColor: "#dddddd",
+    barcodeImage: "",
     paperType: "white",
   });
 
@@ -95,7 +97,7 @@ export default function CoverEditor({
   // Scale factor for preview (fit in ~700px width)
   const scale = Math.min(700 / totalWidth, 500 / totalHeight);
 
-  const handleImageUpload = (field: "frontBgImage" | "backBgImage") => {
+  const handleImageUpload = (field: "frontBgImage" | "backBgImage" | "barcodeImage") => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
@@ -182,21 +184,29 @@ export default function CoverEditor({
     ctx.textAlign = "center";
     wrapText(ctx, cover.backBlurb, backCenterX, bleedPx + safeZone + contentH * 0.15, backW - safeZone * 2, cover.backBlurbSize * (DPI / 72) * 1.5);
 
-    // Barcode placeholder (bottom-right of back cover)
+    // Barcode area (bottom-right of back cover)
     const barcodeW = BARCODE_W * DPI;
     const barcodeH = BARCODE_H * DPI;
     const barcodeX = backX + backW - safeZone - barcodeW;
     const barcodeY = bleedPx + contentH - safeZone - barcodeH;
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(barcodeX, barcodeY, barcodeW, barcodeH);
-    ctx.strokeStyle = "#cccccc";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(barcodeX, barcodeY, barcodeW, barcodeH);
-    ctx.fillStyle = "#999999";
-    ctx.font = `${10 * (DPI / 72)}px sans-serif`;
-    ctx.textAlign = "center";
-    ctx.fillText("BARCODE AREA", barcodeX + barcodeW / 2, barcodeY + barcodeH / 2 + 5);
-    ctx.fillText("(Auto-placed by KDP)", barcodeX + barcodeW / 2, barcodeY + barcodeH / 2 + 20 * (DPI / 72));
+
+    if (cover.barcodeImage) {
+      // Draw imported barcode image
+      const img = new Image();
+      img.src = cover.barcodeImage;
+      try { ctx.drawImage(img, barcodeX, barcodeY, barcodeW, barcodeH); } catch (_) { /* image not loaded yet */ }
+    } else {
+      ctx.strokeStyle = "#cccccc";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(barcodeX, barcodeY, barcodeW, barcodeH);
+      ctx.fillStyle = "#999999";
+      ctx.font = `${10 * (DPI / 72)}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillText("BARCODE AREA", barcodeX + barcodeW / 2, barcodeY + barcodeH / 2 + 5);
+      ctx.fillText("(Auto-placed by KDP)", barcodeX + barcodeW / 2, barcodeY + barcodeH / 2 + 20 * (DPI / 72));
+    }
 
     // Guide lines (trim lines)
     ctx.setLineDash([10, 10]);
@@ -393,8 +403,18 @@ export default function CoverEditor({
                   <input type="color" value={cover.backBlurbColor} onChange={(e) => update("backBlurbColor", e.target.value)} className="w-6 h-6 rounded cursor-pointer" />
                 </FieldRow>
               </div>
+              <FieldRow label="Barcode Image">
+                <div className="flex gap-1">
+                  <button onClick={() => handleImageUpload("barcodeImage")} className="px-3 py-1 text-xs rounded bg-sand-200 dark:bg-stone-700 text-stone-600 dark:text-sand-300 hover:bg-sand-300">
+                    {cover.barcodeImage ? "Replace Barcode" : "Import Barcode"}
+                  </button>
+                  {cover.barcodeImage && (
+                    <button onClick={() => update("barcodeImage", "")} className="px-2 py-1 text-xs rounded text-red-500 hover:bg-red-50">Clear</button>
+                  )}
+                </div>
+              </FieldRow>
               <div className="text-xs text-ink-muted dark:text-sand-400 bg-sand-100 dark:bg-stone-800 rounded-lg p-3">
-                Barcode area (2" x 1.2") is reserved in the bottom-right corner. KDP will auto-place the barcode if not provided.
+                Barcode area (2" x 1.2") is reserved in the bottom-right corner. {cover.barcodeImage ? "Your barcode image will be used." : "KDP will auto-place the barcode if not provided. Import your own barcode image if you have one."}
               </div>
             </div>
           )}
@@ -418,23 +438,25 @@ export default function CoverEditor({
               }}
             >
               <div style={{ padding: `${px(BLEED + SAFE_ZONE)}px`, paddingTop: px(BLEED + SAFE_ZONE + trimHeight * 0.1) }}>
-                <p style={{ color: cover.backBlurbColor, fontSize: cover.backBlurbSize * scale / 6, lineHeight: 1.5, textAlign: "center" }}>
+                <p style={{ color: cover.backBlurbColor, fontSize: cover.backBlurbSize * scale / 72, lineHeight: 1.5, textAlign: "center" }}>
                   {cover.backBlurb}
                 </p>
               </div>
-              {/* Barcode placeholder */}
+              {/* Barcode area */}
               <div
-                className="absolute bg-white border border-gray-300 flex items-center justify-center"
+                className="absolute bg-white border border-gray-300 flex items-center justify-center overflow-hidden"
                 style={{
                   right: px(SAFE_ZONE),
                   bottom: px(BLEED + SAFE_ZONE),
                   width: px(BARCODE_W),
                   height: px(BARCODE_H),
-                  fontSize: 8 * scale / 8,
+                  fontSize: 8 * scale / 72,
                   color: "#999",
                 }}
               >
-                BARCODE
+                {cover.barcodeImage ? (
+                  <img src={cover.barcodeImage} alt="Barcode" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                ) : "BARCODE"}
               </div>
             </div>
 
@@ -471,15 +493,15 @@ export default function CoverEditor({
               }}
             >
               <div style={{ textAlign: "center", padding: `0 ${px(SAFE_ZONE)}px` }}>
-                <div style={{ color: cover.frontTitleColor, fontSize: cover.frontTitleSize * scale / 6, fontWeight: "bold", fontFamily: "Georgia, serif", marginBottom: 8 }}>
+                <div style={{ color: cover.frontTitleColor, fontSize: cover.frontTitleSize * scale / 72, fontWeight: "bold", fontFamily: "Georgia, serif", marginBottom: 8 }}>
                   {cover.frontTitle}
                 </div>
                 {cover.frontSubtitle && (
-                  <div style={{ color: cover.frontSubtitleColor, fontSize: cover.frontSubtitleSize * scale / 6, fontStyle: "italic", fontFamily: "Georgia, serif", marginBottom: 12 }}>
+                  <div style={{ color: cover.frontSubtitleColor, fontSize: cover.frontSubtitleSize * scale / 72, fontStyle: "italic", fontFamily: "Georgia, serif", marginBottom: 12 }}>
                     {cover.frontSubtitle}
                   </div>
                 )}
-                <div style={{ color: cover.frontAuthorColor, fontSize: cover.frontAuthorSize * scale / 6, fontFamily: "Georgia, serif", marginTop: px(trimHeight * 0.3) }}>
+                <div style={{ color: cover.frontAuthorColor, fontSize: cover.frontAuthorSize * scale / 72, fontFamily: "Georgia, serif", marginTop: px(trimHeight * 0.3) }}>
                   {cover.frontAuthor}
                 </div>
               </div>

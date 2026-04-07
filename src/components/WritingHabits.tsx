@@ -29,27 +29,34 @@ function formatDate(d: string): string {
 }
 
 export default function WritingHabits({ projectId, onClose }: WritingHabitsProps) {
-  const { goal, logs, loadGoal, saveGoal, loadLogs, logWords, clear } = useGoalsStore();
+  const { goal, logs, loadGoal, saveGoal, loadLogs, logWords } = useGoalsStore();
   const chapters = useChapterStore((s) => s.chapters);
   const [activeTab, setActiveTab] = useState<"overview" | "goals" | "history">("overview");
+  const [logsLoaded, setLogsLoaded] = useState(false);
 
   const totalWords = chapters.reduce((sum, ch) => sum + ch.word_count, 0);
 
   useEffect(() => {
+    setLogsLoaded(false);
     loadGoal(projectId).catch((err) => console.error("Failed to load goal:", err));
-    loadLogs(projectId).catch((err) => console.error("Failed to load logs:", err));
-    return () => clear();
+    loadLogs(projectId).then(() => setLogsLoaded(true)).catch((err) => console.error("Failed to load logs:", err));
   }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-log today's word count on load
+  // Auto-log today's word count — only after logs are loaded to avoid overwriting
   useEffect(() => {
-    if (totalWords > 0) {
-      const today = todayStr();
-      const todayLog = logs.find((l) => l.date === today);
-      const wordsWritten = todayLog ? Math.max(0, totalWords - (todayLog.word_count - todayLog.words_written)) : 0;
+    if (!logsLoaded || totalWords === 0) return;
+    const today = todayStr();
+    const todayLog = logs.find((l) => l.date === today);
+    if (todayLog) {
+      // Baseline = word count at start of today (before any writing today)
+      const baseline = todayLog.word_count - todayLog.words_written;
+      const wordsWritten = Math.max(0, totalWords - baseline);
       logWords(projectId, today, totalWords, wordsWritten, 0).catch((err) => console.error("Failed to log words:", err));
+    } else {
+      // First log of the day — current total is the baseline (0 words written today yet)
+      logWords(projectId, today, totalWords, 0, 0).catch((err) => console.error("Failed to log words:", err));
     }
-  }, [totalWords]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [totalWords, logsLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tabBtn = (tab: typeof activeTab, label: string) => (
     <button

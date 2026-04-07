@@ -180,7 +180,8 @@ sup.fn-ref {{ font-size: 0.75em; color: #4a6249; }}
 
         let heading_tag = if section.chapter_type == "part" { "h1" } else { "h2" };
 
-        let processed_content = process_footnotes(&section.content);
+        let cleaned_content = process_text_messages(&section.content);
+        let processed_content = process_footnotes(&cleaned_content);
         zip.write_all(
             format!(
                 r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -317,6 +318,85 @@ sup.fn-ref {{ font-size: 0.75em; color: #4a6249; }}
 
     zip.finish()?;
     Ok(())
+}
+
+/// Convert text-message divs from TipTap into clean XHTML-compatible markup.
+fn process_text_messages(content: &str) -> String {
+    let mut result = content.to_string();
+    let mut search_pos = 0;
+
+    while let Some(start) = result[search_pos..].find("<div data-text-message") {
+        let abs_start = search_pos + start;
+        // Find the closing </div> - text messages have nested divs so we need to count
+        let mut depth = 0;
+        let mut pos = abs_start;
+        let mut end_pos = None;
+        while pos < result.len() {
+            if result[pos..].starts_with("<div") {
+                depth += 1;
+                pos += 4;
+            } else if result[pos..].starts_with("</div>") {
+                depth -= 1;
+                if depth == 0 {
+                    end_pos = Some(pos + 6);
+                    break;
+                }
+                pos += 6;
+            } else {
+                pos += 1;
+            }
+        }
+
+        if let Some(abs_end) = end_pos {
+            let block = &result[abs_start..abs_end];
+            let sender = extract_attr(block, "data-sender")
+                .or_else(|| {
+                    // Extract from nested sender div
+                    if let Some(s) = block.find("text-message-sender") {
+                        if let Some(gt) = block[s..].find('>') {
+                            let after = &block[s + gt + 1..];
+                            if let Some(lt) = after.find('<') {
+                                return Some(after[..lt].to_string());
+                            }
+                        }
+                    }
+                    None
+                })
+                .unwrap_or_default();
+            let text_content = extract_attr(block, "data-text")
+                .or_else(|| {
+                    // Extract from nested bubble div
+                    if let Some(s) = block.find("text-message-bubble") {
+                        if let Some(gt) = block[s..].find('>') {
+                            let after = &block[s + gt + 1..];
+                            if let Some(lt) = after.find('<') {
+                                return Some(after[..lt].to_string());
+                            }
+                        }
+                    }
+                    None
+                })
+                .unwrap_or_default();
+            let side = extract_attr(block, "data-side").unwrap_or_else(|| "left".to_string());
+            let is_right = side == "right";
+            let align = if is_right { "right" } else { "left" };
+
+            let replacement = format!(
+                r#"<div style="text-align: {align}; margin: 0.5em 0;"><div style="font-size: 0.75em; color: #888;">{sender}</div><div style="display: inline-block; background: {bg}; color: {fg}; padding: 0.5em 1em; border-radius: 1em; max-width: 75%; text-align: left;">{text}</div></div>"#,
+                align = align,
+                sender = escape_xml(&sender),
+                bg = if is_right { "#4a6249" } else { "#e8e0d4" },
+                fg = if is_right { "#ffffff" } else { "#333333" },
+                text = escape_xml(&text_content),
+            );
+            result = format!("{}{}{}", &result[..abs_start], replacement, &result[abs_end..]);
+            search_pos = abs_start + replacement.len();
+        } else {
+            search_pos = abs_start + 1;
+        }
+    }
+
+    result
 }
 
 /// Extract footnotes from TipTap HTML and convert to endnotes at chapter bottom.
