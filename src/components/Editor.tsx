@@ -570,7 +570,10 @@ export default function Editor() {
       {/* Editor area */}
       <div ref={editorScrollRef} className="flex-1 overflow-y-auto">
         <div className={`max-w-3xl mx-auto px-12 py-10 ${dyslexicFont ? "font-opendyslexic" : ""} ${focusMode ? "focus-mode" : ""}`}
-          style={dyslexicFont ? { fontFamily: "'OpenDyslexic', sans-serif" } : undefined}>
+          style={{
+            ...(dyslexicFont ? { fontFamily: "'OpenDyslexic', sans-serif" } : {}),
+            ...(typewriterMode ? { paddingTop: "50vh", paddingBottom: "50vh" } : {}),
+          }}>
           <EditorContent editor={editor} />
         </div>
       </div>
