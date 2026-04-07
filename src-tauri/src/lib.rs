@@ -403,6 +403,70 @@ fn update_project_metadata(state: State<AppState>, id: String, isbn: String, cop
     db.update_project_metadata(&id, &isbn, &copyright_year, &publisher, bleed_enabled, bleed_size_in).map_err(|e| e.to_string())
 }
 
+// --- Plot Point Completion ---
+
+#[tauri::command]
+fn toggle_plot_point_completed(state: State<AppState>, id: String, completed: bool) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.toggle_plot_point_completed(&id, completed).map_err(|e| e.to_string())
+}
+
+// --- Editor Comments ---
+
+#[tauri::command]
+fn create_editor_comment(state: State<AppState>, chapter_id: String, project_id: String, content: String, author: String, color: String, position_from: i32, position_to: i32) -> Result<db::EditorComment, String> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.create_editor_comment(&id, &chapter_id, &project_id, &content, &author, &color, position_from, position_to).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn list_editor_comments(state: State<AppState>, chapter_id: String) -> Result<Vec<db::EditorComment>, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.list_editor_comments(&chapter_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn resolve_editor_comment(state: State<AppState>, id: String, resolved: bool) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.resolve_editor_comment(&id, resolved).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_editor_comment(state: State<AppState>, id: String) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.delete_editor_comment(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn create_comment_reply(state: State<AppState>, comment_id: String, content: String, author: String) -> Result<db::CommentReply, String> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.create_comment_reply(&id, &comment_id, &content, &author).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn list_comment_replies(state: State<AppState>, comment_id: String) -> Result<Vec<db::CommentReply>, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.list_comment_replies(&comment_id).map_err(|e| e.to_string())
+}
+
+// --- Project File Export/Import ---
+
+#[tauri::command]
+fn export_project_file(state: State<AppState>, project_id: String, output_path: String) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let json = db.export_project_file(&project_id).map_err(|e| e.to_string())?;
+    std::fs::write(&output_path, json).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn import_project_file(state: State<AppState>, input_path: String) -> Result<String, String> {
+    let json = std::fs::read_to_string(&input_path).map_err(|e| e.to_string())?;
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.import_project_file(&json).map_err(|e| e.to_string())
+}
+
 // --- Import DOCX ---
 
 #[tauri::command]
@@ -683,6 +747,15 @@ pub fn run() {
             delete_snapshot,
             update_project_metadata,
             import_docx,
+            toggle_plot_point_completed,
+            create_editor_comment,
+            list_editor_comments,
+            resolve_editor_comment,
+            delete_editor_comment,
+            create_comment_reply,
+            list_comment_replies,
+            export_project_file,
+            import_project_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

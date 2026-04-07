@@ -169,6 +169,7 @@ export interface PlotPoint {
   color: string;
   pos_x: number;
   pos_y: number;
+  completed: boolean;
 }
 
 export interface PlotConnection {
@@ -204,6 +205,67 @@ export function listPlotConnections(projectId: string): Promise<PlotConnection[]
 
 export function deletePlotConnection(id: string): Promise<void> {
   return invoke("delete_plot_connection", { id });
+}
+
+export function togglePlotPointCompleted(id: string, completed: boolean): Promise<void> {
+  return invoke("toggle_plot_point_completed", { id, completed });
+}
+
+// --- Editor Comments ---
+
+export interface EditorComment {
+  id: string;
+  chapter_id: string;
+  project_id: string;
+  content: string;
+  author: string;
+  color: string;
+  position_from: number;
+  position_to: number;
+  resolved: boolean;
+  created_at: string;
+}
+
+export interface CommentReply {
+  id: string;
+  comment_id: string;
+  content: string;
+  author: string;
+  created_at: string;
+}
+
+export function createEditorComment(chapterId: string, projectId: string, content: string, author: string, color: string, positionFrom: number, positionTo: number): Promise<EditorComment> {
+  return invoke("create_editor_comment", { chapterId, projectId, content, author, color, positionFrom, positionTo });
+}
+
+export function listEditorComments(chapterId: string): Promise<EditorComment[]> {
+  return invoke("list_editor_comments", { chapterId });
+}
+
+export function resolveEditorComment(id: string, resolved: boolean): Promise<void> {
+  return invoke("resolve_editor_comment", { id, resolved });
+}
+
+export function deleteEditorComment(id: string): Promise<void> {
+  return invoke("delete_editor_comment", { id });
+}
+
+export function createCommentReply(commentId: string, content: string, author: string): Promise<CommentReply> {
+  return invoke("create_comment_reply", { commentId, content, author });
+}
+
+export function listCommentReplies(commentId: string): Promise<CommentReply[]> {
+  return invoke("list_comment_replies", { commentId });
+}
+
+// --- Project File Export/Import ---
+
+export function exportProjectFile(projectId: string, outputPath: string): Promise<void> {
+  return invoke("export_project_file", { projectId, outputPath });
+}
+
+export function importProjectFile(inputPath: string): Promise<string> {
+  return invoke("import_project_file", { inputPath });
 }
 
 // --- Characters ---

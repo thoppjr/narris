@@ -34,6 +34,11 @@ interface SidebarProps {
   onShowSnapshots: () => void;
   onTitleChange: (title: string) => void;
   onShowCover: () => void;
+  editorMode: boolean;
+  onToggleEditorMode: () => void;
+  showPlotSidebar: boolean;
+  onTogglePlotSidebar: () => void;
+  onSaveShare: () => void;
 }
 
 const SECTION_TYPE_LABELS: Record<string, string> = {
@@ -165,7 +170,7 @@ function SortableChapter({
   );
 }
 
-export default function Sidebar({ projectTitle, onBack, onShowPlot, onShowCharacters, onExport, onShowFormatting, onShowHabits, onShowPreview, onShowThemes, onShowMasterPages, onShowImages, onShowSettings, onShowSnapshots, onTitleChange, onShowCover }: SidebarProps) {
+export default function Sidebar({ projectTitle, onBack, onShowPlot, onShowCharacters, onExport, onShowFormatting, onShowHabits, onShowPreview, onShowThemes, onShowMasterPages, onShowImages, onShowSettings, onShowSnapshots, onTitleChange, onShowCover, editorMode, onToggleEditorMode, showPlotSidebar, onTogglePlotSidebar, onSaveShare }: SidebarProps) {
   const { chapters, activeChapterId, createChapter, createSection, deleteChapter, setActiveChapter, reorder } =
     useChapterStore();
   const [newTitle, setNewTitle] = useState("");
@@ -363,6 +368,34 @@ export default function Sidebar({ projectTitle, onBack, onShowPlot, onShowCharac
             Cover
           </button>
         </div>
+        <div className="flex gap-2">
+          <button
+            onClick={onTogglePlotSidebar}
+            className={`flex-1 px-2 py-1.5 text-xs rounded-lg transition-colors text-center ${
+              showPlotSidebar
+                ? "bg-sage-600 text-white"
+                : "bg-sand-200 dark:bg-stone-700 text-stone-600 dark:text-sand-300 hover:bg-sand-300 dark:hover:bg-stone-600"
+            }`}
+          >
+            Plot Guide
+          </button>
+          <button
+            onClick={onToggleEditorMode}
+            className={`flex-1 px-2 py-1.5 text-xs rounded-lg transition-colors text-center ${
+              editorMode
+                ? "bg-amber-500 text-white"
+                : "bg-sand-200 dark:bg-stone-700 text-stone-600 dark:text-sand-300 hover:bg-sand-300 dark:hover:bg-stone-600"
+            }`}
+          >
+            Editor
+          </button>
+        </div>
+        <button
+          onClick={onSaveShare}
+          className="w-full px-2 py-1.5 text-xs rounded-lg bg-sage-100 dark:bg-sage-800 text-sage-700 dark:text-sage-200 hover:bg-sage-200 dark:hover:bg-sage-700 transition-colors text-center"
+        >
+          Save / Share Project
+        </button>
       </div>
 
       {/* Chapter list */}
