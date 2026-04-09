@@ -16,8 +16,12 @@ export default function FindReplace({ editor, isOpen, onClose }: FindReplaceProp
 
   const clearHighlights = useCallback(() => {
     if (!editor) return;
-    // Remove all search highlight marks
-    editor.commands.unsetMark("highlight");
+    // Remove all search-related decorations (no-op if mark type doesn't exist)
+    try {
+      editor.commands.unsetMark("highlight");
+    } catch {
+      // highlight mark may not be registered
+    }
   }, [editor]);
 
   const findMatches = useCallback(() => {
