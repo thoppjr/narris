@@ -45,7 +45,7 @@ export default function EditorView({ projectId, onBack }: EditorViewProps) {
   const [spellcheck, setSpellcheck] = useState(false);
   const [commentColor, setCommentColor] = useState("#f59e0b");
   const [showEditorModePanel, setShowEditorModePanel] = useState(false);
-  const commentPaneKey = useChapterStore.getState().activeChapterId || "";
+  const activeChapterId = useChapterStore((s) => s.activeChapterId);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editorRef = useRef<any>(null);
 
@@ -347,8 +347,8 @@ export default function EditorView({ projectId, onBack }: EditorViewProps) {
       {/* Comment pane (shown in editor mode) */}
       {editorMode && (
         <CommentPane
-          key={commentPaneKey}
-          chapterId={commentPaneKey}
+          key={activeChapterId || ""}
+          chapterId={activeChapterId || ""}
           projectId={projectId}
           authorName={project.author || "Author"}
           commentColor={commentColor}

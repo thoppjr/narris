@@ -14,6 +14,7 @@ import { Footnote } from "../extensions/Footnote";
 import { TextMessage } from "../extensions/TextMessage";
 import { InlineImage } from "../extensions/InlineImage";
 import { CommentHighlight } from "../extensions/CommentHighlight";
+import Highlight from "@tiptap/extension-highlight";
 
 function countWords(text: string): number {
   return text.trim() ? text.trim().split(/\s+/).length : 0;
@@ -405,6 +406,7 @@ export default function Editor({ editorMode = false, spellcheck = false, onAddCo
       Underline,
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       Typography,
+      Highlight,
       CommentHighlight,
       Footnote,
       TextMessage,
